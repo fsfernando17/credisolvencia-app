@@ -2,13 +2,11 @@ import streamlit as st
 from google import genai
 from google.genai import types
 
-# Configuración de la interfaz
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
 st.write("Sube la ficha del asesor, las fotos de los requisitos y el PDF de Sentinel para emitir el dictamen automático.")
 
-# Gestión de API Key desde la configuración o input
 api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.sidebar.text_input("Ingresa tu Gemini API Key:", type="password")
 
 if not api_key:
@@ -32,16 +30,13 @@ else:
                 try:
                     contents = []
                     
-                    # Carga del PDF de Sentinel
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Carga de las Fotografías
                     for foto in fotos_requisitos:
                         img_bytes = foto.read()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type=foto.type))
                     
-                    # Prompt de instrucciones con reglas de negocio
                     prompt_instrucciones = f"""
                     Actúa como Analista Experto en Riesgo Crediticio para Credisolvencia. Audita la solicitud enviada:
                     - Tipo de Crédito: {tipo_credito}
@@ -56,9 +51,9 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Ejecución del modelo multimodal
+                    # Se utiliza el identificador oficial de modelo alias de alta disponibilidad
                     response = client.models.generate_content(
-                        model="gemini-1.5-flash",
+                        model="gemini-1.5-flash-latest",
                         contents=contents
                     )
                     
