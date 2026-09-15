@@ -1,6 +1,7 @@
 import streamlit as st
 from google import genai
 from google.genai import types
+import time
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
@@ -30,11 +31,10 @@ else:
                 try:
                     contents = []
                     
-                    # Cargar PDF de Sentinel
+                    # Preparación de archivos
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Cargar Fotografías
                     for foto in fotos_requisitos:
                         img_bytes = foto.read()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type=foto.type))
@@ -53,29 +53,33 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Bucle para probar modelos según disponibilidad de la API
-                    modelos_disponibles = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
+                    # Sistema de reintentos automáticos para evitar errores de saturación (503)
+                    max_reintentos = 3
                     response = None
                     ultimo_error = ""
 
-                    for mod in modelos_disponibles:
+                    for intento in range(max_reintentos):
                         try:
                             response = client.models.generate_content(
-                                model=mod,
+                                model="gemini-3.6-flash",
                                 contents=contents
                             )
                             if response:
-                                break
+                                break  # Se obtuvo respuesta exitosa, se rompe el bucle
                         except Exception as err:
                             ultimo_error = str(err)
-                            continue
+                            if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
+                                time.sleep(2)  # Pausa de 2 segundos antes de reintentar
+                                continue
+                            else:
+                                break  # Si es un error distinto a la saturación, se detiene el reintento
 
                     if response:
                         st.success("Auditoría completada:")
                         st.markdown("---")
                         st.markdown(response.text)
                     else:
-                        st.error(f"Error de conexión con la API: {ultimo_error}")
+                        st.error(f"Error de conexión tras {max_reintentos} intentos. Detalle: {ultimo_error}")
 
                 except Exception as e:
-                    st.error(f"Ocurrió un error al procesar los archivos: {str(e)}")
+                    st.error(f"Error al procesar la solicitud: {str(e)}")
