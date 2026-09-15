@@ -1,6 +1,5 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
@@ -12,7 +11,7 @@ api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets els
 if not api_key:
     st.info("Por favor ingresa tu Gemini API Key en la barra lateral para continuar.")
 else:
-    client = genai.Client(api_key=api_key)
+    genai.configure(api_key=api_key)
 
     with st.form("form_credito"):
         tipo_credito = st.selectbox("Tipo de Crédito", ["Individual", "Grupal"])
@@ -30,12 +29,20 @@ else:
                 try:
                     contents = []
                     
+                    # Preparar PDF
                     pdf_bytes = sentinel_pdf.read()
-                    contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
+                    contents.append({
+                        "mime_type": "application/pdf",
+                        "data": pdf_bytes
+                    })
                     
+                    # Preparar Fotografías
                     for foto in fotos_requisitos:
                         img_bytes = foto.read()
-                        contents.append(types.Part.from_bytes(data=img_bytes, mime_type=foto.type))
+                        contents.append({
+                            "mime_type": foto.type,
+                            "data": img_bytes
+                        })
                     
                     prompt_instrucciones = f"""
                     Actúa como Analista Experto en Riesgo Crediticio para Credisolvencia. Audita la solicitud enviada:
@@ -51,11 +58,9 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Se utiliza el identificador oficial de modelo alias de alta disponibilidad
-                    response = client.models.generate_content(
-                        model="gemini-1.5-flash-latest",
-                        contents=contents
-                    )
+                    # Instanciar el modelo con la librería genai directa
+                    model = genai.GenerativeModel("gemini-1.5-flash")
+                    response = model.generate_content(contents)
                     
                     st.success("Auditoría completada:")
                     st.markdown("---")
