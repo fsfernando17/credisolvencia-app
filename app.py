@@ -54,8 +54,10 @@ else:
                     contents.append(prompt_instrucciones)
 
              # Intento de ejecución con fallback automático si hay alta demanda
-                    modelos_disponibles = ["gemini-2.5-flash", "gemini-1.5-flash"]
+# Lista de modelos vigentes en la API
+                    modelos_disponibles = ["gemini-3.6-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
                     response = None
+                    ultimo_error = ""
 
                     for mod in modelos_disponibles:
                         try:
@@ -66,17 +68,12 @@ else:
                             if response:
                                 break
                         except Exception as err:
-                            if "503" in str(err) or "UNAVAILABLE" in str(err) or "404" in str(err):
-                                continue
-                            else:
-                                raise err
+                            ultimo_error = str(err)
+                            continue
 
                     if response:
                         st.success("Auditoría completada:")
                         st.markdown("---")
                         st.markdown(response.text)
                     else:
-                        st.error("Servidores de Google ocupados. Por favor, reintenta en unos segundos.")
-
-                except Exception as e:
-                    st.error(f"Ocurrió un error al procesar la solicitud: {str(e)}")
+                        st.error(f"Error de conexión con la API: {ultimo_error}")
