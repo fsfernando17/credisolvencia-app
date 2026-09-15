@@ -53,9 +53,9 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Modelo oficial Gemini 2.0 Flash
+                    # Modelo actualizado Gemini 3.6 Flash
                     response = client.models.generate_content(
-                        model="gemini-2.0-flash",
+                        model="gemini-3.6-flash",
                         contents=contents
                     )
                     
