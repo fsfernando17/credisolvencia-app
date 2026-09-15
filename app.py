@@ -53,15 +53,30 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Modelo actualizado Gemini 3.6 Flash
-                    response = client.models.generate_content(
-                        model="gemini-3.6-flash",
-                        contents=contents
-                    )
-                    
-                    st.success("Auditoría completada:")
-                    st.markdown("---")
-                    st.markdown(response.text)
+             # Intento de ejecución con fallback automático si hay alta demanda
+                    modelos_disponibles = ["gemini-2.5-flash", "gemini-1.5-flash"]
+                    response = None
+
+                    for mod in modelos_disponibles:
+                        try:
+                            response = client.models.generate_content(
+                                model=mod,
+                                contents=contents
+                            )
+                            if response:
+                                break
+                        except Exception as err:
+                            if "503" in str(err) or "UNAVAILABLE" in str(err) or "404" in str(err):
+                                continue
+                            else:
+                                raise err
+
+                    if response:
+                        st.success("Auditoría completada:")
+                        st.markdown("---")
+                        st.markdown(response.text)
+                    else:
+                        st.error("Servidores de Google ocupados. Por favor, reintenta en unos segundos.")
 
                 except Exception as e:
                     st.error(f"Ocurrió un error al procesar la solicitud: {str(e)}")
