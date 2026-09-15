@@ -53,9 +53,8 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-             # Intento de ejecución con fallback automático si hay alta demanda
-# Lista de modelos vigentes en la API
-                    modelos_disponibles = ["gemini-3.6-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+                    # Bucle para probar modelos según disponibilidad de la API
+                    modelos_disponibles = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
                     response = None
                     ultimo_error = ""
 
@@ -77,3 +76,6 @@ else:
                         st.markdown(response.text)
                     else:
                         st.error(f"Error de conexión con la API: {ultimo_error}")
+
+                except Exception as e:
+                    st.error(f"Ocurrió un error al procesar los archivos: {str(e)}")
