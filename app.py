@@ -31,7 +31,6 @@ else:
                 try:
                     contents = []
                     
-                    # Preparación de archivos
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
@@ -53,8 +52,8 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema de reintentos automáticos para evitar errores de saturación (503)
-                    max_reintentos = 3
+                    # Sistema de persistencia agresiva frente a saturación
+                    max_reintentos = 5
                     response = None
                     ultimo_error = ""
 
@@ -65,14 +64,14 @@ else:
                                 contents=contents
                             )
                             if response:
-                                break  # Se obtuvo respuesta exitosa, se rompe el bucle
+                                break
                         except Exception as err:
                             ultimo_error = str(err)
                             if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
-                                time.sleep(2)  # Pausa de 2 segundos antes de reintentar
+                                time.sleep(5)
                                 continue
                             else:
-                                break  # Si es un error distinto a la saturación, se detiene el reintento
+                                break
 
                     if response:
                         st.success("Auditoría completada:")
