@@ -1,5 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
@@ -11,7 +12,7 @@ api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets els
 if not api_key:
     st.info("Por favor ingresa tu Gemini API Key en la barra lateral para continuar.")
 else:
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
     with st.form("form_credito"):
         tipo_credito = st.selectbox("Tipo de Crédito", ["Individual", "Grupal"])
@@ -29,20 +30,14 @@ else:
                 try:
                     contents = []
                     
-                    # Preparar PDF
+                    # Cargar PDF de Sentinel
                     pdf_bytes = sentinel_pdf.read()
-                    contents.append({
-                        "mime_type": "application/pdf",
-                        "data": pdf_bytes
-                    })
+                    contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Preparar Fotografías
+                    # Cargar Fotografías
                     for foto in fotos_requisitos:
                         img_bytes = foto.read()
-                        contents.append({
-                            "mime_type": foto.type,
-                            "data": img_bytes
-                        })
+                        contents.append(types.Part.from_bytes(data=img_bytes, mime_type=foto.type))
                     
                     prompt_instrucciones = f"""
                     Actúa como Analista Experto en Riesgo Crediticio para Credisolvencia. Audita la solicitud enviada:
@@ -58,9 +53,11 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Instanciar el modelo con la librería genai directa
-                    model = genai.GenerativeModel("gemini-1.5-flash")
-                    response = model.generate_content(contents)
+                    # Modelo oficial Gemini 2.0 Flash
+                    response = client.models.generate_content(
+                        model="gemini-2.0-flash",
+                        contents=contents
+                    )
                     
                     st.success("Auditoría completada:")
                     st.markdown("---")
