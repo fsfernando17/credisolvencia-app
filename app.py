@@ -4,11 +4,10 @@ from google.genai import types
 import time
 from datetime import datetime
 import requests
-import json
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS CON DATOS EXTRAÍDOS ---
+# --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(tipo_credito, dni, nombre, suministro, estado, ficha, dictamen):
     try:
         url_script = st.secrets.get("GOOGLE_SHEET_URL", "")
@@ -76,15 +75,7 @@ else:
                     2. BURÓ (SENTINEL): En Crédito Individual rechazar si está en CPP, DEF, DUD o PER (con Días Venc. <= 365 días). Si está en PER con > 365 días o NOR, es APTO. En Crédito Grupal se permite flexibilidad sujeto a aval.
                     3. REQUISITOS (IMÁGENES): Validar presencia de DNI/C4 vigente, Caja de Luz/Suministro, Foto Vivienda y Foto Negocio.
 
-                    Además del dictamen, DEBES incluir al inicio de tu respuesta un bloque en formato JSON estricto con los siguientes datos extraídos de los documentos:
-                    {{
-                      "dni": "número de DNI encontrado o 'No encontrado'",
-                      "nombre": "nombre completo del cliente o 'No encontrado'",
-                      "suministro": "número de suministro de la caja de luz o 'No encontrado'",
-                      "estado": "APROBADO o OBSERVADO o RECHAZADO o DOCUMENTACIÓN_FALTANTE"
-                    }}
-
-                    Emite el dictamen final detallado después del JSON.
+                    Emite el dictamen final siguiendo la estructura estándar con ESTADO (APROBADO / OBSERVADO / RECHAZADO / DOCUMENTACIÓN_FALTANTE) y JUSTIFICACIÓN.
                     """
                     contents.append(prompt_instrucciones)
 
@@ -109,12 +100,12 @@ else:
                             else:
                                 break
 
-                  if response:
+                    if response:
                         st.success("Auditoría completada:")
                         st.markdown("---")
                         st.markdown(response.text)
                         
-                        # Extracción segura y directa garantizada
+                        # Extracción y registro automático seguro
                         texto_respuesta = response.text
                         dni_ext = "No especificado"
                         nombre_ext = "No especificado"
@@ -122,7 +113,6 @@ else:
                         estado_ext = "APROBADO" if "APROBADO" in texto_respuesta.upper() else ("RECHAZADO" if "RECHAZADO" in texto_respuesta.upper() else "OBSERVADO")
                         
                         try:
-                            # Búsqueda manual de datos clave por texto si el JSON falla
                             for linea in texto_respuesta.split("\n"):
                                 if "dni" in linea.lower():
                                     dni_ext = ''.join(filter(str.isdigit, linea)) or "No especificado"
@@ -133,7 +123,6 @@ else:
                         except:
                             pass
 
-                        # Envío inmediato y seguro a tu Google Sheet
                         guardar_en_sheets(tipo_credito, dni_ext, nombre_ext, suministro_ext, estado_ext, ficha_texto, texto_respuesta)
                     else:
                         st.error(f"Error de conexión tras {max_reintentos} intentos. Detalle: {ultimo_error}")
