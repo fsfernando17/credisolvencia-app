@@ -2,17 +2,41 @@ import streamlit as st
 from google import genai
 from google.genai import types
 import time
+from datetime import datetime
+import requests
+import json
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
+
+# --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS CON DATOS EXTRAÍDOS ---
+def guardar_en_sheets(tipo_credito, dni, nombre, suministro, estado, ficha, dictamen):
+    try:
+        url_script = st.secrets.get("GOOGLE_SHEET_URL", "")
+        if not url_script:
+            return
+            
+        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload = {
+            "fecha": fecha_actual,
+            "tipo_credito": tipo_credito,
+            "dni": dni,
+            "nombre": nombre,
+            "suministro": suministro,
+            "estado": estado,
+            "ficha_resumen": ficha[:150],
+            "dictamen": dictamen[:400]
+        }
+        requests.post(url_script, json=payload, timeout=5)
+    except Exception as e:
+        st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
 st.write("Sube la ficha del asesor, las fotos de los requisitos y el PDF de Sentinel para emitir el dictamen automático.")
 
-# El sistema extrajo las credenciales ocultas desde el servidor de Streamlit
-api_key_oculta = st.secrets.get("GEMINI_API_KEY", "")
+# Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
+api_key_oculta = st.secrets.get("GEMINI_API_KEY", "")
 
-# Se configuró la interfaz de acceso exclusivo para trabajadores
 clave_ingresada = st.sidebar.text_input("Clave de Subadministrador / Asesor:", type="password")
 
 if clave_ingresada != clave_correcta or not clave_correcta:
@@ -35,7 +59,6 @@ else:
             with st.spinner("Analizando expediente y aplicando reglas de riesgo..."):
                 try:
                     contents = []
-                    
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
@@ -53,11 +76,19 @@ else:
                     2. BURÓ (SENTINEL): En Crédito Individual rechazar si está en CPP, DEF, DUD o PER (con Días Venc. <= 365 días). Si está en PER con > 365 días o NOR, es APTO. En Crédito Grupal se permite flexibilidad sujeto a aval.
                     3. REQUISITOS (IMÁGENES): Validar presencia de DNI/C4 vigente, Caja de Luz/Suministro, Foto Vivienda y Foto Negocio.
 
-                    Emite el dictamen final siguiendo la estructura estándar con ESTADO (APROBADO / OBSERVADO / RECHAZADO / DOCUMENTACIÓN_FALTANTE) y JUSTIFICACIÓN.
+                    Además del dictamen, DEBES incluir al inicio de tu respuesta un bloque en formato JSON estricto con los siguientes datos extraídos de los documentos:
+                    {{
+                      "dni": "número de DNI encontrado o 'No encontrado'",
+                      "nombre": "nombre completo del cliente o 'No encontrado'",
+                      "suministro": "número de suministro de la caja de luz o 'No encontrado'",
+                      "estado": "APROBADO o OBSERVADO o RECHAZADO o DOCUMENTACIÓN_FALTANTE"
+                    }}
+
+                    Emite el dictamen final detallado después del JSON.
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema automático de reintentos
+                    # Sistema de reintentos automáticos
                     max_reintentos = 5
                     response = None
                     ultimo_error = ""
@@ -82,6 +113,29 @@ else:
                         st.success("Auditoría completada:")
                         st.markdown("---")
                         st.markdown(response.text)
+                        
+                        # Extracción automática de datos estructurados para el registro
+                        texto_respuesta = response.text
+                        dni_ext = "No especificado"
+                        nombre_ext = "No especificado"
+                        suministro_ext = "No especificado"
+                        estado_ext = "EVALUADO"
+                        
+                        try:
+                            # Intenta extraer el JSON que generó la IA
+                            inicio_json = texto_respuesta.find("{")
+                            fin_json = texto_respuesta.find("}") + 1
+                            if inicio_json != -1 and fin_json != 0:
+                                datos_json = json.loads(texto_respuesta[inicio_json:fin_json])
+                                dni_ext = datos_json.get("dni", "No especificado")
+                                nombre_ext = datos_json.get("nombre", "No especificado")
+                                suministro_ext = datos_json.get("suministro", "No especificado")
+                                estado_ext = datos_json.get("estado", "EVALUADO")
+                        except:
+                            pass
+
+                        # Guardar ordenado en Google Sheets
+                        guardar_en_sheets(tipo_credito, dni_ext, nombre_ext, suministro_ext, estado_ext, ficha_texto, texto_respuesta)
                     else:
                         st.error(f"Error de conexión tras {max_reintentos} intentos. Detalle: {ultimo_error}")
 
