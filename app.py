@@ -8,12 +8,17 @@ st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", l
 st.title("📋 Evaluador de Crédito - Credisolvencia")
 st.write("Sube la ficha del asesor, las fotos de los requisitos y el PDF de Sentinel para emitir el dictamen automático.")
 
-api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.sidebar.text_input("Ingresa tu Gemini API Key:", type="password")
+# El sistema extrajo las credenciales ocultas desde el servidor de Streamlit
+api_key_oculta = st.secrets.get("GEMINI_API_KEY", "")
+clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
 
-if not api_key:
-    st.info("Por favor ingresa tu Gemini API Key en la barra lateral para continuar.")
+# Se configuró la interfaz de acceso exclusivo para trabajadores
+clave_ingresada = st.sidebar.text_input("Clave de Subadministrador / Asesor:", type="password")
+
+if clave_ingresada != clave_correcta or not clave_correcta:
+    st.warning("⚠️ Por favor, ingresa la clave de acceso autorizada en la barra lateral para habilitar la auditoría.")
 else:
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key_oculta)
 
     with st.form("form_credito"):
         tipo_credito = st.selectbox("Tipo de Crédito", ["Individual", "Grupal"])
@@ -52,7 +57,7 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema de persistencia agresiva frente a saturación
+                    # Sistema automático de reintentos
                     max_reintentos = 5
                     response = None
                     ultimo_error = ""
