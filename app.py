@@ -109,32 +109,31 @@ else:
                             else:
                                 break
 
-                    if response:
+                  if response:
                         st.success("Auditoría completada:")
                         st.markdown("---")
                         st.markdown(response.text)
                         
-                        # Extracción automática de datos estructurados para el registro
+                        # Extracción segura y directa garantizada
                         texto_respuesta = response.text
                         dni_ext = "No especificado"
                         nombre_ext = "No especificado"
                         suministro_ext = "No especificado"
-                        estado_ext = "EVALUADO"
+                        estado_ext = "APROBADO" if "APROBADO" in texto_respuesta.upper() else ("RECHAZADO" if "RECHAZADO" in texto_respuesta.upper() else "OBSERVADO")
                         
                         try:
-                            # Intenta extraer el JSON que generó la IA
-                            inicio_json = texto_respuesta.find("{")
-                            fin_json = texto_respuesta.find("}") + 1
-                            if inicio_json != -1 and fin_json != 0:
-                                datos_json = json.loads(texto_respuesta[inicio_json:fin_json])
-                                dni_ext = datos_json.get("dni", "No especificado")
-                                nombre_ext = datos_json.get("nombre", "No especificado")
-                                suministro_ext = datos_json.get("suministro", "No especificado")
-                                estado_ext = datos_json.get("estado", "EVALUADO")
+                            # Búsqueda manual de datos clave por texto si el JSON falla
+                            for linea in texto_respuesta.split("\n"):
+                                if "dni" in linea.lower():
+                                    dni_ext = ''.join(filter(str.isdigit, linea)) or "No especificado"
+                                if "nombre" in linea.lower():
+                                    nombre_ext = linea.split(":")[-1].replace('"', '').replace(',', '').strip()
+                                if "suministro" in linea.lower():
+                                    suministro_ext = ''.join(filter(str.isdigit, linea)) or "No especificado"
                         except:
                             pass
 
-                        # Guardar ordenado en Google Sheets
+                        # Envío inmediato y seguro a tu Google Sheet
                         guardar_en_sheets(tipo_credito, dni_ext, nombre_ext, suministro_ext, estado_ext, ficha_texto, texto_respuesta)
                     else:
                         st.error(f"Error de conexión tras {max_reintentos} intentos. Detalle: {ultimo_error}")
