@@ -7,11 +7,12 @@ import requests
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
+# --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS CON AVISO VISUAL ---
 def guardar_en_sheets(tipo_credito, dni, nombre, suministro, estado, ficha, dictamen):
     try:
         url_script = st.secrets.get("GOOGLE_SHEET_URL", "")
         if not url_script:
+            st.warning("⚠️ Falta configurar la URL de Google Sheets en los Secretos de Streamlit.")
             return
             
         fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -25,7 +26,11 @@ def guardar_en_sheets(tipo_credito, dni, nombre, suministro, estado, ficha, dict
             "ficha_resumen": ficha[:150],
             "dictamen": dictamen[:400]
         }
-        requests.post(url_script, json=payload, timeout=5)
+        respuesta = requests.post(url_script, json=payload, timeout=10)
+        if respuesta.status_code == 200:
+            st.success("✅ ¡Expediente registrado correctamente en Google Sheets!")
+        else:
+            st.warning(f"⚠️ El servidor de Google respondió con código: {respuesta.status_code}")
     except Exception as e:
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
