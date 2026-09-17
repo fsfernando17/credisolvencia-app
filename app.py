@@ -7,7 +7,7 @@ import requests
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS CON AVISO VISUAL ---
+# --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(tipo_credito, dni, nombre, suministro, estado, ficha, dictamen):
     try:
         url_script = st.secrets.get("GOOGLE_SHEET_URL", "")
@@ -84,7 +84,7 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema de reintentos automáticos
+                    # Sistema automático de reintentos con gemini-3.6-flash (configuración original estable)
                     max_reintentos = 5
                     response = None
                     ultimo_error = ""
