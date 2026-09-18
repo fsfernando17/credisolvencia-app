@@ -52,22 +52,23 @@ else:
     client = genai.Client(api_key=api_key_oculta)
 
     with st.form("form_credito"):
-        # 1. Selector de Modalidad Principal
-        modalidad = st.selectbox("Tipo de Crédito:", ["Individual", "Grupal"])
+        # 1. Selector de Modalidad Principal con Key única
+        modalidad = st.selectbox("Tipo de Crédito:", ["Individual", "Grupal"], key="select_modalidad")
         
-        # 2. Selector Dinámico y Correcto de Productos
+        # 2. Selector Dinámico con Keys separadas para evitar conflictos visuales
+        producto = ""
         if modalidad == "Individual":
-            producto = st.selectbox("Seleccione el Producto Individual:", ["INTI", "YUNKA", "YAPAY"])
+            producto = st.selectbox("Seleccione el Producto Individual:", ["INTI", "YUNKA", "YAPAY"], key="select_prod_ind")
         else:
-            producto = st.selectbox("Seleccione el Producto Grupal:", ["WARMI", "LLAMA"])
+            producto = st.selectbox("Seleccione el Producto Grupal:", ["WARMI", "LLAMA"], key="select_prod_grp")
             
         # 3. Selector de Condición del Cliente
-        condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"])
+        condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"], key="select_condicion")
         
         # Subcategoría que solo aparece si es Renovado
         detalle_condicion = condicion_cliente
         if condicion_cliente == "Renovado":
-            sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada"])
+            sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada"], key="select_sub_renovacion")
             detalle_condicion = f"Renovado ({sub_renovacion})"
 
         ficha_texto = st.text_area("Ficha de Datos del Asesor:", height=150)
