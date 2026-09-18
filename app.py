@@ -80,11 +80,16 @@ else:
                     2. BURÓ (SENTINEL): En Crédito Individual rechazar si está en CPP, DEF, DUD o PER (con Días Venc. <= 365 días). Si está en PER con > 365 días o NOR, es APTO. En Crédito Grupal se permite flexibilidad sujeto a aval.
                     3. REQUISITOS (IMÁGENES): Validar presencia de DNI/C4 vigente, Caja de Luz/Suministro, Foto Vivienda y Foto Negocio.
 
-                    Emite el dictamen final siguiendo la estructura estándar con ESTADO (APROBADO / OBSERVADO / RECHAZADO / DOCUMENTACIÓN_FALTANTE) y JUSTIFICACIÓN.
+                    4. ESTIMACIÓN DE CAPACIDAD DE PAGO: Evalúa las imágenes del negocio/vivienda y el comportamiento financiero en Sentinel para estimar la capacidad de pago mensual del cliente y determina si es viable frente al crédito solicitado.
+                    5. VALIDACIÓN CRUZADA DE SUMINISTRO (CAJA DE LUZ): Revisa el nombre del titular en el recibo de luz (suministro) frente a lo declarado en la Ficha del Asesor:
+                       - Si se indicó que la vivienda es de un **familiar**, verifica si existe coincidencia de apellidos.
+                       - Si se indicó que es de un **conviviente** o **alquilada**, haz mención expresa de esta condición y evalúa su coherencia con la documentación.
+
+                    Emite el dictamen final estructurado incluyendo claramente el ESTADO (APROBADO / OBSERVADO / RECHAZADO / DOCUMENTACIÓN_FALTANTE), la JUSTIFICACIÓN, la CAPACIDAD DE PAGO ESTIMADA y la VALIDACIÓN DEL SUMINISTRO.
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema automático de reintentos con gemini-3.6-flash (configuración original estable)
+                    # Sistema automático de reintentos con gemini-3.6-flash
                     max_reintentos = 5
                     response = None
                     ultimo_error = ""
