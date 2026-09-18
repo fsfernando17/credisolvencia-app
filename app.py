@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- ESQUEMA ESTRUCTURADO CON MONTO DE CUOTA ---
+# --- ESQUEMA ESTRUCTURADO PARA EXTRACCIÓN CERO ERRORES ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación de edad, buró Sentinel, validación de luz, regla de cuotas de descuento, capacidad de pago y nivel de riesgo como comentarios analíticos.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel (sin exagerar historiales normales), validación de luz, regla de cuotas de descuento, monto de cuota, capacidad de pago y nivel de riesgo como comentarios analíticos.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
     nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
     apellidos: str = Field(description="Apellidos completos del cliente (sin nombres).")
@@ -20,7 +20,7 @@ class AuditoriaCredito(BaseModel):
     monto_cuota: str = Field(description="Monto exacto de cada cuota a pagar según la frecuencia (ej. S/ 150).")
     nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 como métrica analítica de comentario.")
     capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero como comentario analítico.")
-    estado_final: str = Field(description="Estrictamente uno de estos tres valores basado ÚNICAMENTE en normativas formales (edad, cuotas de descuento, luz, Sentinel): APROBADO, OBSERVADO o RECHAZADO.")
+    estado_final: str = Field(description="Estrictamente uno de estos tres valores basado ÚNICAMENTE en normativas formales (edad menor a 66, máximo 3 cuotas de descuento, suministro válido y Sentinel sin moras activas graves): APROBADO, OBSERVADO o RECHAZADO.")
 
 # --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(datos_dict):
@@ -96,21 +96,20 @@ else:
                     Ficha del Asesor: {ficha_texto}
 
                     POLÍTICAS OFICIALES POR PRODUCTO:
-                    1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem. Requisito: Buen Sentinel, negocio >1 año.
+                    1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem. Requisito: Historial Sentinel normal/aceptable (sin moras pesadas activas) y negocio >1 año.
                     2. WARMI: Grupos 6-8 mujeres (20-65). Tasa: 4% catorcenal / 8% mensual. Frec: Catorcenal. Garantía: Solidaridad grupal.
                     3. YUNKA: Emprendedores (20-65). Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Semanal. Requisito: Buen Sentinel, negocio >6 meses, vivienda >1 año.
                     4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Diaria (lunes a viernes). Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
                     5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
-                    REGLAS CRÍTICAS Y CONDICIÓN DE ESTADO FINAL:
-                    - El estado final (APROBADO, OBSERVADO, RECHAZADO) debe definirse **exclusivamente** por el cumplimiento de las normas obligatorias:
-                      1. EDAD: RECHAZO AUTOMÁTICO si el titular tiene 66 años o más (>= 66 años) en individuales.
-                      2. LÍMITE DE CUOTAS DE DESCUENTO: Máximo 3 cuotas permitidas. Si se indica un descuento mayor a 3 cuotas, es motivo estricto de OBSERVACIÓN / RECHAZADO.
-                      3. SUMINISTRO (LUZ): Valida titularidad (familiar con coincidencia de apellidos, conviviente o alquilada).
-                      4. BURÓ SENTINEL Y ANTIGÜEDAD: Según las políticas del producto seleccionado ({producto}).
+                    REGLAS CRÍTICAS Y EVALUACIÓN REALISTA DEL SENTINEL:
+                    - **BURÓ EXPERIAN/SENTINEL:** Analiza el PDF de forma objetiva y justa. No exageres ni interpretes de forma alarmista historiales antiguos o puntajes normales si el cliente mantiene un comportamiento de pago regular o aceptable en el sistema. Un cliente con un reporte dentro de parámetros normales (sin deudas morosas impagas actuales y graves) debe considerarse **APTO**.
+                    - **EDAD:** RECHAZO AUTOMÁTICO si el titular tiene 66 años o más (>= 66 años) en individuales.
+                    - **LÍMITE DE CUOTAS DE DESCUENTO:** Máximo 3 cuotas permitidas. Si se indica un descuento mayor a 3 cuotas, es motivo estricto de OBSERVACIÓN / RECHAZADO.
+                    - **SUMINISTRO (LUZ):** Valida titularidad (familiar con coincidencia de apellidos, conviviente o alquilada).
                     - **IMPORTANTE:** La capacidad de pago estimada y el nivel de riesgo calculado NO deben condicionar ni afectar por sí solos la decisión de aprobación del crédito; deben presentarse únicamente como **comentarios analíticos y métricas de soporte descriptivo**.
 
-                    Rellena todos los campos del esquema estructurado con absoluta precisión, separando correctamente nombres, apellidos y calculando el monto de la cuota.
+                    Rellena todos los campos del esquema estructurado con absoluta precisión, separando correctamente nombres, apellidos, calculando el monto de la cuota y emitiendo un veredicto justo y realista.
                     """
                     contents.append(prompt_instrucciones)
 
@@ -152,7 +151,7 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado con el orden exacto de las columnas en Google Sheets
+                        # Payload estructurado con el orden exacto de las 13 columnas en Google Sheets
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
