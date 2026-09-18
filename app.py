@@ -8,18 +8,19 @@ from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- ESQUEMA ESTRUCTURADO PARA EXTRACCIÓN CERO ERRORES ---
+# --- ESQUEMA ESTRUCTURADO CON MONTO DE CUOTA ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación de edad, buró Sentinel, validación de luz, regla de cuotas de descuento y justificación.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación de edad, buró Sentinel, validación de luz, regla de cuotas de descuento, capacidad de pago y nivel de riesgo como comentarios analíticos.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
-    nombres: str = Field(description="Nombres completos del cliente.")
-    apellidos: str = Field(description="Apellidos completos del cliente.")
-    monto: str = Field(description="Monto del crédito solicitado con su símbolo o número.")
+    nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
+    apellidos: str = Field(description="Apellidos completos del cliente (sin nombres).")
+    monto: str = Field(description="Monto total del crédito solicitado con su símbolo o número.")
     interes: str = Field(description="Tasa de interés aplicada según el producto.")
     tipo_cuotas: str = Field(description="Frecuencia de pago obligatoriamente: Semanal, Mensual, Diario o Catorcenal.")
-    nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 (1 menor riesgo, 10 máximo riesgo).")
-    capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero.")
-    estado_final: str = Field(description="Estrictamente uno de estos tres valores: APROBADO, OBSERVADO o RECHAZADO.")
+    monto_cuota: str = Field(description="Monto exacto de cada cuota a pagar según la frecuencia (ej. S/ 150).")
+    nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 como métrica analítica de comentario.")
+    capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero como comentario analítico.")
+    estado_final: str = Field(description="Estrictamente uno de estos tres valores basado ÚNICAMENTE en normativas formales (edad, cuotas de descuento, luz, Sentinel): APROBADO, OBSERVADO o RECHAZADO.")
 
 # --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(datos_dict):
@@ -101,18 +102,19 @@ else:
                     4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Diaria (lunes a viernes). Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
                     5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
-                    NORMATIVAS Y REGLAS CRÍTICAS DE CUMPLIMIENTO:
-                    1. EDAD: RECHAZO AUTOMÁTICO si el titular tiene 66 años o más (>= 66 años) en créditos individuales.
-                    2. LÍMITE DE CUOTAS DE DESCUENTO: El máximo de cuotas permitidas a descontar es de 3 cuotas como máximo. Si se indica un descuento mayor a 3 cuotas, constituye un motivo estricto de OBSERVACIÓN / RECHAZADO.
-                    3. CAPACIDAD DE PAGO: Analiza las fotos del negocio/vivienda y Sentinel para estimar un promedio de pago mensual viable en dinero.
-                    4. SUMINISTRO (LUZ): Valida estrictamente la titularidad (si es familiar, exige coincidencia de apellidos; indica claramente si es conviviente o alquilada).
-                    5. COHERENCIA DE PRODUCTO: Verifica que la antigüedad y condiciones coincidan exactamente con las reglas del producto seleccionado ({producto}).
+                    REGLAS CRÍTICAS Y CONDICIÓN DE ESTADO FINAL:
+                    - El estado final (APROBADO, OBSERVADO, RECHAZADO) debe definirse **exclusivamente** por el cumplimiento de las normas obligatorias:
+                      1. EDAD: RECHAZO AUTOMÁTICO si el titular tiene 66 años o más (>= 66 años) en individuales.
+                      2. LÍMITE DE CUOTAS DE DESCUENTO: Máximo 3 cuotas permitidas. Si se indica un descuento mayor a 3 cuotas, es motivo estricto de OBSERVACIÓN / RECHAZADO.
+                      3. SUMINISTRO (LUZ): Valida titularidad (familiar con coincidencia de apellidos, conviviente o alquilada).
+                      4. BURÓ SENTINEL Y ANTIGÜEDAD: Según las políticas del producto seleccionado ({producto}).
+                    - **IMPORTANTE:** La capacidad de pago estimada y el nivel de riesgo calculado NO deben condicionar ni afectar por sí solos la decisión de aprobación del crédito; deben presentarse únicamente como **comentarios analíticos y métricas de soporte descriptivo**.
 
-                    Rellena todos los campos del esquema estructurado con absoluta precisión, extrayendo los datos reales de los archivos adjuntos y del texto.
+                    Rellena todos los campos del esquema estructurado con absoluta precisión, separando correctamente nombres, apellidos y calculando el monto de la cuota.
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema con Backoff Exponencial y el modelo exacto gemini-3.5-flash-lite requerido por la API
+                    # Sistema con Backoff Exponencial y el modelo activo gemini-3.5-flash-lite
                     max_reintentos = 5
                     response = None
                     ultimo_error = ""
@@ -150,7 +152,7 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado para las 12 columnas exactas del Google Sheet
+                        # Payload estructurado con el orden exacto de las columnas en Google Sheets
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
@@ -161,6 +163,7 @@ else:
                             "monto": resultado.monto,
                             "interes": resultado.interes,
                             "tipo_cuotas": resultado.tipo_cuotas,
+                            "monto_cuota": resultado.monto_cuota,
                             "nivel_riesgo": str(resultado.nivel_riesgo),
                             "capacidad_pago": resultado.capacidad_pago,
                             "estado": f"{resultado.estado_final} [{detalle_condicion}]"
