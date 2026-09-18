@@ -2,40 +2,43 @@ import streamlit as st
 from google import genai
 from google.genai import types
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import requests
+from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
+# --- ESQUEMA ESTRUCTURADO PARA EXTRACCIÓN CERO ERRORES ---
+class AuditoriaCredito(BaseModel):
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación de edad, buró Sentinel, validación de luz, regla de cuotas de descuento y justificación.")
+    dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
+    nombres: str = Field(description="Nombres completos del cliente.")
+    apellidos: str = Field(description="Apellidos completos del cliente.")
+    monto: str = Field(description="Monto del crédito solicitado con su símbolo o número.")
+    interes: str = Field(description="Tasa de interés aplicada según el producto.")
+    tipo_cuotas: str = Field(description="Frecuencia de pago obligatoriamente: Semanal, Mensual o Catorcenal.")
+    nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 (1 menor riesgo, 10 máximo riesgo).")
+    capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero.")
+    estado_final: str = Field(description="Estrictamente uno de estos tres valores: APROBADO, OBSERVADO o RECHAZADO.")
+
 # --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
-def guardar_en_sheets(tipo_credito, dni, nombre, suministro, estado, ficha, dictamen):
+def guardar_en_sheets(datos_dict):
     try:
         url_script = st.secrets.get("GOOGLE_SHEET_URL", "")
         if not url_script:
-            st.warning("⚠️ Falta configurar la URL de Google Sheets en los Secretos de Streamlit.")
+            st.warning("⚠️ Falta configurar la URL de Google Sheets en los Secretos.")
             return
             
-        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        payload = {
-            "fecha": fecha_actual,
-            "tipo_credito": tipo_credito,
-            "dni": dni,
-            "nombre": nombre,
-            "suministro": suministro,
-            "estado": estado,
-            "ficha_resumen": ficha[:150],
-            "dictamen": dictamen[:400]
-        }
-        respuesta = requests.post(url_script, json=payload, timeout=10)
+        respuesta = requests.post(url_script, json=datos_dict, timeout=10)
         if respuesta.status_code == 200:
-            st.success("✅ ¡Expediente registrado correctamente en Google Sheets!")
+            st.success("✅ Expediente registrado limpiamente en Google Sheets.")
         else:
             st.warning(f"⚠️ El servidor de Google respondió con código: {respuesta.status_code}")
     except Exception as e:
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha del asesor, las fotos de los requisitos y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, fotos y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -44,7 +47,7 @@ api_key_oculta = st.secrets.get("GEMINI_API_KEY", "")
 clave_ingresada = st.sidebar.text_input("Clave de Subadministrador / Asesor:", type="password")
 
 if clave_ingresada != clave_correcta or not clave_correcta:
-    st.warning("⚠️ Por favor, ingresa la clave de acceso autorizada en la barra lateral para habilitar la auditoría.")
+    st.warning("⚠️ Ingresa la clave de acceso autorizada para habilitar la auditoría.")
 else:
     client = genai.Client(api_key=api_key_oculta)
 
@@ -52,36 +55,33 @@ else:
         # 1. Selector de Modalidad Principal
         modalidad = st.selectbox("Tipo de Crédito:", ["Individual", "Grupal"])
         
-        # 2. Selector de Producto (Se oculta si es Grupal)
+        # 2. Selector de Producto Dinámico
         producto = ""
         if modalidad == "Individual":
-            producto = st.selectbox("Seleccione el Producto Individual:", ["INTI", "WARMI", "YUNKA", "YAPAY", "LLAMA"])
+            producto = st.selectbox("Producto Individual:", ["INTI", "YUNKA", "YAPAY"])
+        else:
+            producto = st.selectbox("Producto Grupal:", ["WARMI", "LLAMA"])
             
         # 3. Selector de Condición del Cliente
-        condicion_cliente = st.selectbox("Condición del Crédito / Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"])
+        condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"])
         
+        # Subcategoría que solo aparece si es Renovado
         detalle_condicion = condicion_cliente
         if condicion_cliente == "Renovado":
             sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada"])
             detalle_condicion = f"Renovado ({sub_renovacion})"
 
-        # Generación del título para Google Sheets
-        if modalidad == "Individual":
-            tipo_credito_completo = f"{modalidad} - {producto} [{detalle_condicion}]"
-        else:
-            tipo_credito_completo = f"{modalidad} [{detalle_condicion}]"
-
-        ficha_texto = st.text_area("Ficha de Datos del Asesor (Texto enviado por chat):", height=150)
-        sentinel_pdf = st.file_uploader("Cargar Reporte Sentinel / Experian (PDF)", type=["pdf"])
-        fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Caja de Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+        ficha_texto = st.text_area("Ficha de Datos del Asesor:", height=150)
+        sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"])
+        fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
         
         btn_evaluar = st.form_submit_button("🚀 Auditar Expediente")
 
     if btn_evaluar:
         if not sentinel_pdf or not fotos_requisitos:
-            st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías de los requisitos.")
+            st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Analizando expediente y evaluando políticas de Credisolvencia..."):
+            with st.spinner("Analizando expediente y aplicando normativas de Credisolvencia..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
@@ -91,88 +91,86 @@ else:
                         img_bytes = foto.read()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type=foto.type))
                     
-                    # Construcción dinámica de la instrucción para la IA
-                    instruccion_producto = f"- **Producto Seleccionado:** {producto}" if producto else "- **Producto:** Crédito Grupal Estándar"
-                    
                     prompt_instrucciones = f"""
-                    Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita la solicitud evaluando las reglas y la condición específica del cliente:
-                    - **Modalidad:** {modalidad}
-                    {instruccion_producto}
-                    - **Condición de la Operación:** {detalle_condicion}
-                    - **Ficha de Datos:** {ficha_texto}
+                    Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita rigurosamente la solicitud:
+                    Modalidad: {modalidad} | Producto: {producto if producto else 'Grupal'} | Condición: {detalle_condicion}
+                    Ficha del Asesor: {ficha_texto}
 
                     POLÍTICAS OFICIALES POR PRODUCTO:
-                    1. **INTI (Individual):** Microempresas > 1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frecuencia: Semanal. Plazos: 4 a 8 semanas. Requisito: Buen historial Sentinel y negocio > 1 año.
-                    2. **YUNKA (Individual):** Emprendedores (20-65 años) con negocio propio. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frecuencia: Semanal. Requisito: Buen historial Sentinel, negocio > 6 meses y vivienda > 1 año.
-                    3. **YAPAY (Individual):** Negocios > 6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frecuencia: Diaria. Plazos: 22 a 44 días útiles. Requisito: Permite buena o mala calificación en Sentinel.
-                    4. **WARMI (Grupal):** Grupos de 6 a 8 mujeres (20-65 años). Tasa: 4% catorcenal. Garantía: Solidaridad grupal.
-                    5. **LLAMA (Grupal):** Grupos de 4 mujeres (20-65 años). Tasa: 3% semanal. Garantía: 5% depósito + solidaridad grupal.
-                    *(Si la modalidad es Grupal y no se especificó producto, evaluar que se cumplan las garantías solidarias y el perfil grupal emprendedor).*
+                    1. INTI (Individual): Microempresas >1 año. Tasa: 3% sem / 12% men. Frec: Semanal. Plazo: 4-8 sem. Requisito: Buen Sentinel, negocio >1 año.
+                    2. YUNKA (Individual): Emprendedores (20-65). Tasa: 4.5% sem / 18% men. Frec: Semanal. Requisito: Buen Sentinel, negocio >6 meses, vivienda >1 año.
+                    3. YAPAY (Individual): Negocios >6 meses. Tasa: 4.5% sem / 18% men. Frec: Diaria. Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
+                    4. WARMI (Grupal): Grupos 6-8 mujeres (20-65). Tasa: 4% catorcenal. Garantía: Solidaridad grupal.
+                    5. LLAMA (Grupal): Grupos 4 mujeres (20-65). Tasa: 3% sem. Garantía: 5% depósito + solidaridad grupal.
 
-                    CRITERIOS ESPECÍFICOS SEGÚN CONDICIÓN ({detalle_condicion}):
-                    - **Nuevo:** Validación rigurosa inicial de negocio, vivienda y buró según el producto.
-                    - **Renovado (Adelantada):** Cliente con excelente comportamiento; evaluar si califica para aprobación rápida.
-                    - **Renovado (Atrasada):** Cliente con historial de retrasos; analizar estrictamente si el riesgo de mora persiste.
-                    - **Recuperado:** Revisar estabilidad actual del negocio y mitigación de su comportamiento pasado.
-                    - **Promotor:** Aplicar condiciones de fomento verificando que cumpla los mínimos de seguridad.
+                    NORMATIVAS Y REGLAS CRÍTICAS DE CUMPLIMIENTO:
+                    1. EDAD: RECHAZO AUTOMÁTICO si el titular tiene 66 años o más (>= 66 años) en créditos individuales.
+                    2. LÍMITE DE CUOTAS DE DESCUENTO: El máximo de cuotas permitidas a descontar es de 3 cuotas como máximo. Si se indica un descuento mayor a 3 cuotas, constituye un motivo estricto de OBSERVACIÓN / RECHAZADO.
+                    3. CAPACIDAD DE PAGO: Analiza las fotos del negocio/vivienda y Sentinel para estimar un promedio de pago mensual viable en dinero.
+                    4. SUMINISTRO (LUZ): Valida estrictamente la titularidad (si es familiar, exige coincidencia de apellidos; indica claramente si es conviviente o alquilada).
+                    5. COHERENCIA DE PRODUCTO: Verifica que la antigüedad y condiciones coincidan exactamente con las reglas del producto seleccionado.
 
-                    REGLAS OBLIGATORIAS (CAPACIDAD DE PAGO, LUZ Y COHERENCIA):
-                    1. **EDAD:** RECHAZO AUTOMÁTICO si tiene 66 años o más (>= 66 años) en créditos individuales.
-                    2. **CAPACIDAD DE PAGO:** Estimar financieramente la viabilidad del cliente basándote en las fotos del negocio/vivienda y Sentinel.
-                    3. **SUMINISTRO (LUZ):** Validar estrictamente la titularidad del recibo de luz (si es familiar, exigir coincidencia de apellidos; si es conviviente o alquilada, validarlo y mencionarlo).
-                    4. **COHERENCIA:** Si los datos no coinciden con las políticas del producto solicitado, detectarlo como error y observar/rechazar.
-
-                    Emite el dictamen final estructurado detallando: ESTADO (APROBADO / OBSERVADO / RECHAZADO), VALIDACIÓN DEL PRODUCTO Y CONDICIÓN ({tipo_credito_completo}), CAPACIDAD DE PAGO ESTIMADA, VALIDACIÓN DEL SUMINISTRO y JUSTIFICACIÓN.
+                    Rellena todos los campos del esquema estructurado con absoluta precisión, extrayendo los datos reales de los archivos adjuntos y del texto.
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema automático de reintentos
+                    # Sistema con Backoff Exponencial y JSON estructurado garantizado
                     max_reintentos = 5
                     response = None
                     ultimo_error = ""
+                    tiempo_espera = 3
 
                     for intento in range(max_reintentos):
                         try:
                             response = client.models.generate_content(
                                 model="gemini-3.6-flash",
-                                contents=contents
+                                contents=contents,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    response_schema=AuditoriaCredito,
+                                ),
                             )
-                            if response:
+                            if response and response.parsed:
                                 break
                         except Exception as err:
                             ultimo_error = str(err)
                             if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
-                                time.sleep(5)
+                                time.sleep(tiempo_espera)
+                                tiempo_espera *= 2
                                 continue
                             else:
                                 break
 
-                    if response:
+                    if response and response.parsed:
+                        resultado = response.parsed
+                        
                         st.success("Auditoría completada:")
                         st.markdown("---")
-                        st.markdown(response.text)
+                        st.markdown(resultado.dictamen_markdown)
                         
-                        # Extracción y registro automático a Google Sheets (Mantenido intacto)
-                        texto_respuesta = response.text
-                        dni_ext = "No especificado"
-                        nombre_ext = "No especificado"
-                        suministro_ext = "No especificado"
-                        estado_ext = "APROBADO" if "APROBADO" in texto_respuesta.upper() else ("RECHAZADO" if "RECHAZADO" in texto_respuesta.upper() else "OBSERVADO")
-                        
-                        try:
-                            for linea in texto_respuesta.split("\n"):
-                                if "dni" in linea.lower():
-                                    dni_ext = ''.join(filter(str.isdigit, linea)) or "No especificado"
-                                if "nombre" in linea.lower():
-                                    nombre_ext = linea.split(":")[-1].replace('"', '').replace(',', '').strip()
-                                if "suministro" in linea.lower():
-                                    suministro_ext = ''.join(filter(str.isdigit, linea)) or "No especificado"
-                        except:
-                            pass
+                        # Hora exacta de Perú (UTC-5)
+                        zona_peru = timezone(timedelta(hours=-5))
+                        fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        guardar_en_sheets(tipo_credito_completo, dni_ext, nombre_ext, suministro_ext, estado_ext, ficha_texto, texto_respuesta)
+                        # Payload estructurado para las 12 columnas exactas del Google Sheet
+                        payload_sheet = {
+                            "fecha": fecha_peru,
+                            "tipo_credito": modalidad,
+                            "producto": producto if producto else "Grupal",
+                            "dni": resultado.dni,
+                            "nombre": resultado.nombres,
+                            "apellidos": resultado.apellidos,
+                            "monto": resultado.monto,
+                            "interes": resultado.interes,
+                            "tipo_cuotas": resultado.tipo_cuotas,
+                            "nivel_riesgo": str(resultado.nivel_riesgo),
+                            "capacidad_pago": resultado.capacidad_pago,
+                            "estado": f"{resultado.estado_final} [{detalle_condicion}]"
+                        }
+
+                        guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"Error de conexión tras {max_reintentos} intentos. Detalle: {ultimo_error}")
+                        st.error(f"Error al procesar la respuesta estructurada. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error al procesar la solicitud: {str(e)}")
