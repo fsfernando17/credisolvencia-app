@@ -49,7 +49,24 @@ else:
     client = genai.Client(api_key=api_key_oculta)
 
     with st.form("form_credito"):
-        tipo_credito = st.selectbox("Seleccione el Producto Crediticio:", ["INTI", "WARMI", "YUNKA", "YAPAY", "LLAMA"])
+        modalidad = st.selectbox("Tipo de Crédito:", ["Individual", "Grupal"])
+        
+        # Selección dinámica de productos
+        if modalidad == "Individual":
+            producto = st.selectbox("Seleccione el Producto Individual:", ["INTI", "YUNKA", "YAPAY"])
+        else:
+            producto = st.selectbox("Seleccione el Producto Grupal:", ["WARMI", "LLAMA"])
+            
+        # Nuevas opciones de condición del cliente / operación
+        condicion_cliente = st.selectbox("Condición del Crédito / Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"])
+        
+        detalle_condicion = condicion_cliente
+        if condicion_cliente == "Renovado":
+            sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada"])
+            detalle_condicion = f"Renovado ({sub_renovacion})"
+
+        tipo_credito_completo = f"{modalidad} - {producto} [{detalle_condicion}]"
+
         ficha_texto = st.text_area("Ficha de Datos del Asesor (Texto enviado por chat):", height=150)
         sentinel_pdf = st.file_uploader("Cargar Reporte Sentinel / Experian (PDF)", type=["pdf"])
         fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Caja de Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
@@ -60,7 +77,7 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías de los requisitos.")
         else:
-            with st.spinner("Analizando expediente y validando políticas del producto..."):
+            with st.spinner("Analizando expediente y evaluando historial del cliente..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
@@ -71,23 +88,31 @@ else:
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type=foto.type))
                     
                     prompt_instrucciones = f"""
-                    Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita la solicitud evaluando estrictamente si cumple con las reglas del producto seleccionado:
-                    - **Producto Seleccionado por el Asesor:** {tipo_credito}
+                    Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita la solicitud evaluando las reglas del producto y la condición específica del cliente:
+                    - **Modalidad y Producto:** {modalidad} - {producto}
+                    - **Condición de la Operación:** {detalle_condicion}
                     - **Ficha de Datos:** {ficha_texto}
 
-                    POLÍTICAS OFICIALES POR PRODUCTO (VALIDACIÓN CRUZADA OBLIGATORIA):
-                    1. **INTI:** Dirigido a microempresas con más de 1 año de funcionamiento. Requisito clave: Buen historial en Sentinel y negocio propio > 1 año de antigüedad. Frecuencia: Semanal. Plazos: 4 a 8 semanas.
-                    2. **WARMI:** Grupos de 6 a 8 mujeres emprendedoras (20 a 65 años) que se agrupan voluntariamente. Frecuencia: Catorcenal. Garantía: Solidaridad grupal. Requisito clave: Grupo de mujeres con negocios/emprendimientos.
-                    3. **YUNKA:** Emprendedores (20 a 65 años) con negocio propio. Frecuencia: Semanal. Requisito clave: Estar bien calificado en Sentinel, negocio propio > 6 meses y vivienda propia > 1 año.
-                    4. **YAPAY:** Negocios con al menos 6 meses de antigüedad. Frecuencia: Diaria (lunes a viernes). Requisito clave: Permite clientes con buena o mala calificación en Sentinel. Negocio propio > 6 meses y vivienda propia > 1 año.
-                    5. **LLAMA:** Grupos de 4 mujeres emprendedoras (20 a 65 años) con negocio propio. Frecuencia: Semanal. Garantía: Depósito de garantía del 5% + solidaridad grupal. Requisito clave: No apto para clientes mal calificados en 3 entidades o con pérdidas en créditos grupales.
+                    POLÍTICAS OFICIALES POR PRODUCTO:
+                    1. **INTI (Individual):** Microempresas > 1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frecuencia: Semanal. Plazos: 4 a 8 semanas. Requisito: Buen historial Sentinel y negocio > 1 año.
+                    2. **YUNKA (Individual):** Emprendedores (20-65 años) con negocio propio. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frecuencia: Semanal. Requisito: Buen historial Sentinel, negocio > 6 meses y vivienda > 1 año.
+                    3. **YAPAY (Individual):** Negocios > 6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frecuencia: Diaria (lunes a viernes). Plazos: 22 a 44 días útiles. Requisito: Permite buena o mala calificación en Sentinel.
+                    4. **WARMI (Grupal):** Grupos de 6 a 8 mujeres (20-65 años). Tasa: 4% catorcenal / 8% mensual. Frecuencia: Catorcenal. Garantía: Solidaridad grupal.
+                    5. **LLAMA (Grupal):** Grupos de 4 mujeres (20-65 años). Tasa: 3% semanal / 12% mensual. Frecuencia: Semanal. Garantía: 5% depósito + solidaridad grupal.
+
+                    CRITERIOS ESPECÍFICOS SEGÚN CONDICIÓN ({detalle_condicion}):
+                    - **Nuevo:** Requiere validación rigurosa inicial de negocio, vivienda y buró según el producto.
+                    - **Renovado (Adelantada):** Cliente con excelente comportamiento de pago previo; evaluar si califica para ampliación o aprobación rápida.
+                    - **Renovado (Atrasada):** Cliente que renueva con historial de retrasos previos; analizar estrictamente si el riesgo de mora persiste o si se requiere mayor garantía/observación.
+                    - **Recuperado:** Cliente que estuvo castigado o inactivo y vuelve; revisar estabilidad actual del negocio y comportamiento pasado.
+                    - **Promotor:** Aplicar condiciones especiales de fomento o referidos institucionales verificando que cumpla los mínimos de seguridad.
 
                     REGLAS GENERALES Y VALIDACIÓN DE ERRORES:
-                    - **EDAD:** RECHAZO AUTOMÁTICO si el cliente tiene 66 años o más (>= 66 años) en productos individuales.
-                    - **COHERENCIA DE PRODUCTO:** Si los datos enviados por el asesor (antigüedad de negocio, calificación en Sentinel, tipo de garantía, género o estructura de grupo) **NO CORRESPONDEN** a lo exigido por el producto `{tipo_credito}`, la IA debe detectarlo obligatoriamente como un **ERROR DE SOLICITUD / NO CUMPLE** y rechazar/observar el expediente indicando la discrepancia exacta.
-                    - **SUMINISTRO Y VIVIENDA:** Validar el nombre del titular del recibo de luz frente a lo declarado (si es familiar, verificar apellidos; si es conviviente o alquilada, indicarlo).
+                    - **EDAD:** RECHAZO AUTOMÁTICO si tiene 66 años o más (>= 66 años) en individuales.
+                    - **COHERENCIA:** Si los datos no coinciden con las políticas de `{producto}` o hay contradicciones, detectarlo como error y rechazar/observar.
+                    - **SUMINISTRO Y VIVIENDA:** Validar titularidad de luz (familiar con coincidencia de apellidos, conviviente o alquilada).
 
-                    Emite el dictamen final estructurado detallando: ESTADO (APROBADO / OBSERVADO / RECHAZADO), VALIDACIÓN DEL PRODUCTO ({tipo_credito}), CAPACIDAD DE PAGO y JUSTIFICACIÓN.
+                    Emite el dictamen final estructurado detallando: ESTADO (APROBADO / OBSERVADO / RECHAZADO), VALIDACIÓN DEL PRODUCTO Y CONDICIÓN ({tipo_credito_completo}), CAPACIDAD DE PAGO y JUSTIFICACIÓN.
                     """
                     contents.append(prompt_instrucciones)
 
@@ -135,7 +160,7 @@ else:
                         except:
                             pass
 
-                        guardar_en_sheets(tipo_credito, dni_ext, nombre_ext, suministro_ext, estado_ext, ficha_texto, texto_respuesta)
+                        guardar_en_sheets(tipo_credito_completo, dni_ext, nombre_ext, suministro_ext, estado_ext, ficha_texto, texto_respuesta)
                     else:
                         st.error(f"Error de conexión tras {max_reintentos} intentos. Detalle: {ultimo_error}")
 
