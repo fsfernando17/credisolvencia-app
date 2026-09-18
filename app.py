@@ -16,7 +16,7 @@ class AuditoriaCredito(BaseModel):
     apellidos: str = Field(description="Apellidos completos del cliente.")
     monto: str = Field(description="Monto del crédito solicitado con su símbolo o número.")
     interes: str = Field(description="Tasa de interés aplicada según el producto.")
-    tipo_cuotas: str = Field(description="Frecuencia de pago obligatoriamente: Semanal, Mensual o Catorcenal.")
+    tipo_cuotas: str = Field(description="Frecuencia de pago obligatoriamente: Semanal, Mensual, Diario o Catorcenal.")
     nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 (1 menor riesgo, 10 máximo riesgo).")
     capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero.")
     estado_final: str = Field(description="Estrictamente uno de estos tres valores: APROBADO, OBSERVADO o RECHAZADO.")
@@ -55,12 +55,11 @@ else:
         # 1. Selector de Modalidad Principal
         modalidad = st.selectbox("Tipo de Crédito:", ["Individual", "Grupal"])
         
-        # 2. Selector de Producto Dinámico
-        producto = ""
+        # 2. Selector Dinámico y Correcto de Productos
         if modalidad == "Individual":
-            producto = st.selectbox("Producto Individual:", ["INTI", "YUNKA", "YAPAY"])
+            producto = st.selectbox("Seleccione el Producto Individual:", ["INTI", "YUNKA", "YAPAY"])
         else:
-            producto = st.selectbox("Producto Grupal:", ["WARMI", "LLAMA"])
+            producto = st.selectbox("Seleccione el Producto Grupal:", ["WARMI", "LLAMA"])
             
         # 3. Selector de Condición del Cliente
         condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"])
@@ -93,22 +92,22 @@ else:
                     
                     prompt_instrucciones = f"""
                     Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita rigurosamente la solicitud:
-                    Modalidad: {modalidad} | Producto: {producto if producto else 'Grupal'} | Condición: {detalle_condicion}
+                    Modalidad: {modalidad} | Producto Seleccionado: {producto} | Condición: {detalle_condicion}
                     Ficha del Asesor: {ficha_texto}
 
                     POLÍTICAS OFICIALES POR PRODUCTO:
-                    1. INTI (Individual): Microempresas >1 año. Tasa: 3% sem / 12% men. Frec: Semanal. Plazo: 4-8 sem. Requisito: Buen Sentinel, negocio >1 año.
-                    2. YUNKA (Individual): Emprendedores (20-65). Tasa: 4.5% sem / 18% men. Frec: Semanal. Requisito: Buen Sentinel, negocio >6 meses, vivienda >1 año.
-                    3. YAPAY (Individual): Negocios >6 meses. Tasa: 4.5% sem / 18% men. Frec: Diaria. Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
-                    4. WARMI (Grupal): Grupos 6-8 mujeres (20-65). Tasa: 4% catorcenal. Garantía: Solidaridad grupal.
-                    5. LLAMA (Grupal): Grupos 4 mujeres (20-65). Tasa: 3% sem. Garantía: 5% depósito + solidaridad grupal.
+                    1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem. Requisito: Buen Sentinel, negocio >1 año.
+                    2. WARMI: Grupos 6-8 mujeres (20-65). Tasa: 4% catorcenal / 8% mensual. Frec: Catorcenal. Garantía: Solidaridad grupal.
+                    3. YUNKA: Emprendedores (20-65). Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Semanal. Requisito: Buen Sentinel, negocio >6 meses, vivienda >1 año.
+                    4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Diaria (lunes a viernes). Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
+                    5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
                     NORMATIVAS Y REGLAS CRÍTICAS DE CUMPLIMIENTO:
                     1. EDAD: RECHAZO AUTOMÁTICO si el titular tiene 66 años o más (>= 66 años) en créditos individuales.
                     2. LÍMITE DE CUOTAS DE DESCUENTO: El máximo de cuotas permitidas a descontar es de 3 cuotas como máximo. Si se indica un descuento mayor a 3 cuotas, constituye un motivo estricto de OBSERVACIÓN / RECHAZADO.
                     3. CAPACIDAD DE PAGO: Analiza las fotos del negocio/vivienda y Sentinel para estimar un promedio de pago mensual viable en dinero.
                     4. SUMINISTRO (LUZ): Valida estrictamente la titularidad (si es familiar, exige coincidencia de apellidos; indica claramente si es conviviente o alquilada).
-                    5. COHERENCIA DE PRODUCTO: Verifica que la antigüedad y condiciones coincidan exactamente con las reglas del producto seleccionado.
+                    5. COHERENCIA DE PRODUCTO: Verifica que la antigüedad y condiciones coincidan exactamente con las reglas del producto seleccionado ({producto}).
 
                     Rellena todos los campos del esquema estructurado con absoluta precisión, extrayendo los datos reales de los archivos adjuntos y del texto.
                     """
@@ -156,7 +155,7 @@ else:
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
-                            "producto": producto if producto else "Grupal",
+                            "producto": producto,
                             "dni": resultado.dni,
                             "nombre": resultado.nombres,
                             "apellidos": resultado.apellidos,
