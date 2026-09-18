@@ -112,7 +112,7 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema con Backoff Exponencial y JSON estructurado garantizado
+                    # Sistema con Backoff Exponencial y el modelo gemini-2.0-flash para máxima estabilidad
                     max_reintentos = 5
                     response = None
                     ultimo_error = ""
@@ -121,7 +121,7 @@ else:
                     for intento in range(max_reintentos):
                         try:
                             response = client.models.generate_content(
-                                model="gemini-3.6-flash",
+                                model="gemini-2.0-flash",
                                 contents=contents,
                                 config=types.GenerateContentConfig(
                                     response_mime_type="application/json",
