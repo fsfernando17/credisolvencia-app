@@ -49,7 +49,7 @@ else:
     client = genai.Client(api_key=api_key_oculta)
 
     with st.form("form_credito"):
-        tipo_credito = st.selectbox("Tipo de Crédito", ["Individual", "Grupal"])
+        tipo_credito = st.selectbox("Seleccione el Producto Crediticio:", ["INTI", "WARMI", "YUNKA", "YAPAY", "LLAMA"])
         ficha_texto = st.text_area("Ficha de Datos del Asesor (Texto enviado por chat):", height=150)
         sentinel_pdf = st.file_uploader("Cargar Reporte Sentinel / Experian (PDF)", type=["pdf"])
         fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Caja de Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
@@ -60,7 +60,7 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías de los requisitos.")
         else:
-            with st.spinner("Analizando expediente y aplicando reglas de riesgo..."):
+            with st.spinner("Analizando expediente y validando políticas del producto..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
@@ -71,25 +71,27 @@ else:
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type=foto.type))
                     
                     prompt_instrucciones = f"""
-                    Actúa como Analista Experto en Riesgo Crediticio para Credisolvencia. Audita la solicitud enviada:
-                    - Tipo de Crédito: {tipo_credito}
-                    - Ficha de Datos: {ficha_texto}
+                    Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita la solicitud evaluando estrictamente si cumple con las reglas del producto seleccionado:
+                    - **Producto Seleccionado por el Asesor:** {tipo_credito}
+                    - **Ficha de Datos:** {ficha_texto}
 
-                    REGLAS OBLIGATORIAS DE NEGOCIO:
-                    1. EDAD: RECHAZO AUTOMÁTICO si el cliente tiene 66 años cumplidos o más (>= 66 años).
-                    2. BURÓ (SENTINEL): En Crédito Individual rechazar si está en CPP, DEF, DUD o PER (con Días Venc. <= 365 días). Si está en PER con > 365 días o NOR, es APTO. En Crédito Grupal se permite flexibilidad sujeto a aval.
-                    3. REQUISITOS (IMÁGENES): Validar presencia de DNI/C4 vigente, Caja de Luz/Suministro, Foto Vivienda y Foto Negocio.
+                    POLÍTICAS OFICIALES POR PRODUCTO (VALIDACIÓN CRUZADA OBLIGATORIA):
+                    1. **INTI:** Dirigido a microempresas con más de 1 año de funcionamiento. Requisito clave: Buen historial en Sentinel y negocio propio > 1 año de antigüedad. Frecuencia: Semanal. Plazos: 4 a 8 semanas.
+                    2. **WARMI:** Grupos de 6 a 8 mujeres emprendedoras (20 a 65 años) que se agrupan voluntariamente. Frecuencia: Catorcenal. Garantía: Solidaridad grupal. Requisito clave: Grupo de mujeres con negocios/emprendimientos.
+                    3. **YUNKA:** Emprendedores (20 a 65 años) con negocio propio. Frecuencia: Semanal. Requisito clave: Estar bien calificado en Sentinel, negocio propio > 6 meses y vivienda propia > 1 año.
+                    4. **YAPAY:** Negocios con al menos 6 meses de antigüedad. Frecuencia: Diaria (lunes a viernes). Requisito clave: Permite clientes con buena o mala calificación en Sentinel. Negocio propio > 6 meses y vivienda propia > 1 año.
+                    5. **LLAMA:** Grupos de 4 mujeres emprendedoras (20 a 65 años) con negocio propio. Frecuencia: Semanal. Garantía: Depósito de garantía del 5% + solidaridad grupal. Requisito clave: No apto para clientes mal calificados en 3 entidades o con pérdidas en créditos grupales.
 
-                    4. ESTIMACIÓN DE CAPACIDAD DE PAGO: Evalúa las imágenes del negocio/vivienda y el comportamiento financiero en Sentinel para estimar la capacidad de pago mensual del cliente y determina si es viable frente al crédito solicitado.
-                    5. VALIDACIÓN CRUZADA DE SUMINISTRO (CAJA DE LUZ): Revisa el nombre del titular en el recibo de luz (suministro) frente a lo declarado en la Ficha del Asesor:
-                       - Si se indicó que la vivienda es de un **familiar**, verifica si existe coincidencia de apellidos.
-                       - Si se indicó que es de un **conviviente** o **alquilada**, haz mención expresa de esta condición y evalúa su coherencia con la documentación.
+                    REGLAS GENERALES Y VALIDACIÓN DE ERRORES:
+                    - **EDAD:** RECHAZO AUTOMÁTICO si el cliente tiene 66 años o más (>= 66 años) en productos individuales.
+                    - **COHERENCIA DE PRODUCTO:** Si los datos enviados por el asesor (antigüedad de negocio, calificación en Sentinel, tipo de garantía, género o estructura de grupo) **NO CORRESPONDEN** a lo exigido por el producto `{tipo_credito}`, la IA debe detectarlo obligatoriamente como un **ERROR DE SOLICITUD / NO CUMPLE** y rechazar/observar el expediente indicando la discrepancia exacta.
+                    - **SUMINISTRO Y VIVIENDA:** Validar el nombre del titular del recibo de luz frente a lo declarado (si es familiar, verificar apellidos; si es conviviente o alquilada, indicarlo).
 
-                    Emite el dictamen final estructurado incluyendo claramente el ESTADO (APROBADO / OBSERVADO / RECHAZADO / DOCUMENTACIÓN_FALTANTE), la JUSTIFICACIÓN, la CAPACIDAD DE PAGO ESTIMADA y la VALIDACIÓN DEL SUMINISTRO.
+                    Emite el dictamen final estructurado detallando: ESTADO (APROBADO / OBSERVADO / RECHAZADO), VALIDACIÓN DEL PRODUCTO ({tipo_credito}), CAPACIDAD DE PAGO y JUSTIFICACIÓN.
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema automático de reintentos con gemini-3.6-flash
+                    # Sistema automático de reintentos
                     max_reintentos = 5
                     response = None
                     ultimo_error = ""
