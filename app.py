@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- ESQUEMA ESTRUCTURADO CON NUEVAS COLUMNAS ---
+# --- ESQUEMA ESTRUCTURADO AJUSTADO ---
 class AuditoriaCredito(BaseModel):
     dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, reglas de descuento, monto de cuota, capacidad de pago, nivel de riesgo y observaciones para subsanar.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
@@ -17,8 +17,8 @@ class AuditoriaCredito(BaseModel):
     apellidos: str = Field(description="Apellidos completos del cliente (sin nombres).")
     monto: str = Field(description="Monto total del crédito solicitado con su símbolo o número.")
     aumento: str = Field(description="Indicar estrictamente 'Sí' o 'No' si el crédito representa un aumento respecto al anterior.")
-    porcentaje: str = Field(description="Porcentaje de la tasa de interés (ej. 15% o 18%).")
-    interes: str = Field(description="Detalle o monto del interés calculado según el producto.")
+    porcentaje: str = Field(description="Porcentaje exacto de la tasa de interés (ej. 15% o 18%).")
+    interes: str = Field(description="Condición o descripción breve de la tasa de interés (ej. Tasa fija del producto). No coloques el monto monetario calculado aquí.")
     tipo: str = Field(description="Frecuencia de pago obligatoriamente: Semanal, Mensual, Diario o Catorcenal.")
     monto_cuota: str = Field(description="Monto exacto de cada cuota a pagar según la frecuencia.")
     num_cuotas: str = Field(description="Número total de cuotas o semanas del cronograma del crédito.")
@@ -104,17 +104,18 @@ else:
                     1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem. Requisito: Historial Sentinel normal/aceptable y negocio >1 año.
                     2. WARMI: Grupos 6-8 mujeres (20-65). Tasa: 4% catorcenal / 8% mensual. Frec: Catorcenal. Garantía: Solidaridad grupal.
                     3. YUNKA: Emprendedores (20-65). Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Semanal. Requisito: Buen Sentinel, negocio >6 meses, vivienda >1 año.
-                    4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Diaria (lunes a viernes). Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
+                    4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
                     5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
-                    REGLAS CRÍTICAS Y NUEVOS CAMPOS DE REGISTRO:
-                    - **¿AUMENTO?:** Analiza si el monto propuesto es mayor al monto actual del cliente. Si aplica, registra estrictamente 'Sí'; de lo contrario, 'No'.
-                    - **CONDICIÓN:** Registra exactamente el valor seleccionado ({detalle_condicion}).
+                    REGLAS CRÍTICAS Y FORMATO DE CAMPOS:
+                    - **INTERES:** En esta columna NO debes colocar montos monetarios calculados (como S/ 126). Coloca únicamente una descripción breve o la tasa aplicada (ej. "Tasa fija"). El porcentaje numérico va exclusivamente en el campo de porcentaje.
+                    - **¿AUMENTO?:** Registrar estrictamente 'Sí' o 'No'.
+                    - **CONDICIÓN:** Registrar exactamente '{detalle_condicion}'.
                     - **ESTADO Y OBSERVACIÓN:** 
-                      * El estado final debe ser estrictamente `APROBADO`, `OBSERVADO` o `RECHAZADO`.
-                      * **Validación de foto del cliente:** Si la foto del rostro del cliente es borrosa o movida pero todo lo demás está conforme, el crédito se **APROBADO** y en la columna de observaciones se anota: `Regularizar foto del cliente al momento del desembolso`. Si hay más falencias graves, el estado pasa a ser **OBSERVADO** o **RECHAZADO** con su respectivo comentario de subsanación.
-                    - **CÓDIGO DE SUMINISTRO:** Extrae obligatoriamente el número de suministro del recibo de luz.
-                    - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta 5 últimas cuotas; semanal a partir de 1 mes (>=4 semanas) permite la última cuota. La capacidad de pago es un indicador analítico no condicionante.
+                      * Estado final: `APROBADO`, `OBSERVADO` o `RECHAZADO`.
+                      * Si la foto del rostro del cliente es borrosa pero todo lo demás está conforme, el crédito se **APROBADO** y en observaciones se anota: `Regularizar foto del cliente al momento del desembolso`. Si hay más falencias graves, pasa a **OBSERVADO**.
+                    - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la foto del recibo de luz.
+                    - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE Pago:** Crédito diario hasta 5 últimas cuotas; semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
 
                     Rellena todos los campos del esquema estructurado con absoluta precisión.
                     """
@@ -158,7 +159,7 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado con el orden exacto de las columnas de tu Google Sheet
+                        # Payload estructurado
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
