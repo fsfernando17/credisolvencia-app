@@ -8,20 +8,20 @@ from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- ESQUEMA ESTRUCTURADO PARA EXTRACCIÓN CERO ERRORES ---
+# --- ESQUEMA ESTRUCTURADO CON EXTRACCIÓN GARANTIZADA DE SUMINISTRO ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, regla de cuotas de descuento permitidas, duración del crédito, monto de cuota, capacidad de pago y nivel de riesgo como comentarios analíticos.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, reglas de descuento actualizadas (diario: hasta 5 últimas cuotas; semanal >= 1 mes: última cuota), monto de cuota, capacidad de pago y nivel de riesgo como comentarios analíticos.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
-    codigo_suministro: str = Field(description="Número o código de suministro de luz extraído directamente de la foto del recibo de luz.")
+    codigo_suministro: str = Field(description="Número o código de suministro de luz extraído estrictamente de la fotografía del recibo de luz adjunta.")
     nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
     apellidos: str = Field(description="Apellidos completos del cliente (sin nombres).")
     monto: str = Field(description="Monto total del crédito solicitado con su símbolo o número.")
     interes: str = Field(description="Tasa de interés aplicada según el producto.")
     tipo_cuotas: str = Field(description="Frecuencia de pago obligatoriamente: Semanal, Mensual, Diario o Catorcenal.")
-    monto_cuota: str = Field(description="Monto exacto de cada cuota a pagar según la frecuencia (ej. S/ 258.80).")
+    monto_cuota: str = Field(description="Monto exacto de cada cuota a pagar según la frecuencia.")
     nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 como métrica analítica de comentario.")
     capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero como comentario analítico no condicionante.")
-    estado_final: str = Field(description="Estrictamente uno de estos tres valores basado ÚNICAMENTE en normativas formales (edad menor a 66, cuotas de descuento válidas, suministro válido y Sentinel sin moras activas graves): APROBADO, OBSERVADO o RECHAZADO.")
+    estado_final: str = Field(description="Estrictamente uno de estos tres valores basado ÚNICAMENTE en normativas formales (edad menor a 66, reglas de descuento válidas, suministro válido y Sentinel sin moras activas graves): APROBADO, OBSERVADO o RECHAZADO.")
 
 # --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(datos_dict):
@@ -103,15 +103,18 @@ else:
                     4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Diaria (lunes a viernes). Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
                     5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
-                    REGLAS CRÍTICAS Y ACLARACIONES ESTRICTAS DE AUDITORÍA:
-                    - **PLAZO Y DURACIÓN DEL CRÉDITO:** Un crédito con duración de 4 semanas (4 cuotas totales de pago) es un plazo estándar totalmente válido y permitido. **NO** confundir la duración o el número total de cuotas del cronograma del crédito con las "cuotas de descuento".
-                    - **LÍMITE DE CUOTAS DE DESCUENTO:** El máximo de 3 cuotas aplica estrictamente a cuotas de descuento o refinanciación por atraso. Si el descuento es de 1 cuota, es totalmente correcto y permitido.
-                    - **CAPACIDAD DE PAGO (INDICADOR NO CONDICIONANTE):** La capacidad de pago estimada es un indicador estadístico y descriptivo de soporte analítico. **NUNCA** debe ser motivo para calificar un crédito como OBSERVADO o RECHAZADO por el hecho de que la cuota parezca ajustada o mayor frente a dicha capacidad.
+                    REGLAS CRÍTICAS Y POLÍTICAS ACTUALIZADAS DE DESCUENTO Y SUMINISTRO:
+                    - **CÓDIGO DE SUMINISTRO:** Es OBLIGATORIO ubicar y extraer el número o código de suministro de luz de la fotografía del recibo cargada. Revisa bien las imágenes para capturar este número exacto.
+                    - **POLÍTICA ACTUALIZADA DE DESCUENTO DE CUOTAS:**
+                      1. **Crédito Diario:** Se permite descontar hasta las **5 últimas cuotas**.
+                      2. **Crédito Semanal (a partir de 1 mes / >= 4 semanas de duración):** Se permite descontar la **última cuota**.
+                      3. Cualquier descuento dentro de estos rangos es completamente válido y aprobado.
+                    - **CAPACIDAD DE PAGO (INDICADOR NO CONDICIONANTE):** Es una métrica estadística y descriptiva de soporte analítico. **NUNCA** debe ser motivo para calificar un crédito como OBSERVADO o RECHAZADO por el hecho de que la cuota sea cercana o mayor.
                     - **BURÓ EXPERIAN/SENTINEL:** Sin moras activas graves, el cliente es apto.
                     - **EDAD:** RECHAZO AUTOMÁTICO si el titular tiene 66 años o más (>= 66 años) en individuales.
                     - **SUMINISTRO (LUZ):** Valida titularidad (familiar con coincidencia de apellidos, conviviente o alquilada).
 
-                    Rellena todos los campos del esquema estructurado con absoluta precisión, separando nombres y apellidos, extrayendo el suministro, y emitiendo un veredicto justo y alineado estrictamente con las reglas normativas.
+                    Rellena todos los campos del esquema estructurado con absoluta precisión, separando nombres y apellidos, extrayendo obligatoriamente el código de suministro y aplicando los nuevos criterios de descuento.
                     """
                     contents.append(prompt_instrucciones)
 
@@ -153,7 +156,7 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado para Google Sheets
+                        # Payload estructurado incluyendo el código de suministro en la posición exacta
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
