@@ -8,10 +8,11 @@ from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- ESQUEMA ESTRUCTURADO PARA EXTRACCIÓN CERO ERRORES ---
+# --- ESQUEMA ESTRUCTURADO CON CÓDIGO DE SUMINISTRO ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel (sin exagerar historiales normales), validación de luz, regla de cuotas de descuento, monto de cuota, capacidad de pago y nivel de riesgo como comentarios analíticos.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación de edad, buró Sentinel, validación de luz, regla de cuotas de descuento, monto de cuota, capacidad de pago y nivel de riesgo como comentarios analíticos.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
+    codigo_suministro: str = Field(description="Número o código de suministro de luz extraído directamente de la foto del recibo de luz.")
     nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
     apellidos: str = Field(description="Apellidos completos del cliente (sin nombres).")
     monto: str = Field(description="Monto total del crédito solicitado con su símbolo o número.")
@@ -96,24 +97,23 @@ else:
                     Ficha del Asesor: {ficha_texto}
 
                     POLÍTICAS OFICIALES POR PRODUCTO:
-                    1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem. Requisito: Historial Sentinel normal/aceptable (sin moras pesadas activas) y negocio >1 año.
+                    1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem. Requisito: Historial Sentinel normal/aceptable y negocio >1 año.
                     2. WARMI: Grupos 6-8 mujeres (20-65). Tasa: 4% catorcenal / 8% mensual. Frec: Catorcenal. Garantía: Solidaridad grupal.
                     3. YUNKA: Emprendedores (20-65). Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Semanal. Requisito: Buen Sentinel, negocio >6 meses, vivienda >1 año.
                     4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Diaria (lunes a viernes). Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
                     5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
-                    REGLAS CRÍTICAS Y EVALUACIÓN REALISTA DEL SENTINEL:
-                    - **BURÓ EXPERIAN/SENTINEL:** Analiza el PDF de forma objetiva y justa. No exageres ni interpretes de forma alarmista historiales antiguos o puntajes normales si el cliente mantiene un comportamiento de pago regular o aceptable en el sistema. Un cliente con un reporte dentro de parámetros normales (sin deudas morosas impagas actuales y graves) debe considerarse **APTO**.
+                    REGLAS CRÍTICAS Y EXTRACCIÓN DE DATOS:
+                    - **CÓDIGO DE SUMINISTRO:** Extrae con absoluta precisión el número o código de suministro de la fotografía del recibo de luz adjunta.
+                    - **BURÓ EXPERIAN/SENTINEL:** Analiza el PDF de forma objetiva. Sin moras activas graves, el cliente es apto.
                     - **EDAD:** RECHAZO AUTOMÁTICO si el titular tiene 66 años o más (>= 66 años) en individuales.
-                    - **LÍMITE DE CUOTAS DE DESCUENTO:** Máximo 3 cuotas permitidas. Si se indica un descuento mayor a 3 cuotas, es motivo estricto de OBSERVACIÓN / RECHAZADO.
-                    - **SUMINISTRO (LUZ):** Valida titularidad (familiar con coincidencia de apellidos, conviviente o alquilada).
-                    - **IMPORTANTE:** La capacidad de pago estimada y el nivel de riesgo calculado NO deben condicionar ni afectar por sí solos la decisión de aprobación del crédito; deben presentarse únicamente como **comentarios analíticos y métricas de soporte descriptivo**.
+                    - **LÍMITE DE CUOTAS DE DESCUENTO:** Máximo 3 cuotas permitidas.
+                    - **IMPORTANTE:** La capacidad de pago y el nivel de riesgo son métricas y comentarios analíticos de soporte, no condicionan la aprobación por sí solos.
 
-                    Rellena todos los campos del esquema estructurado con absoluta precisión, separando correctamente nombres, apellidos, calculando el monto de la cuota y emitiendo un veredicto justo y realista.
+                    Rellena todos los campos del esquema estructurado con absoluta precisión, extrayendo el código de suministro del recibo de luz.
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema con Backoff Exponencial y el modelo activo gemini-3.5-flash-lite
                     max_reintentos = 5
                     response = None
                     ultimo_error = ""
@@ -151,12 +151,13 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado con el orden exacto de las 13 columnas en Google Sheets
+                        # Payload estructurado incluyendo el código de suministro
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
                             "producto": producto,
                             "dni": resultado.dni,
+                            "codigo_suministro": resultado.codigo_suministro,
                             "nombre": resultado.nombres,
                             "apellidos": resultado.apellidos,
                             "monto": resultado.monto,
