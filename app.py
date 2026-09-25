@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- ESQUEMA ESTRUCTURADO SIN MONTO DE INTERÉS ---
+# --- ESQUEMA ESTRUCTURADO BLINDADO ---
 class AuditoriaCredito(BaseModel):
     dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, reglas de descuento, monto de cuota, capacidad de pago, nivel de riesgo y observaciones para subsanar.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
@@ -106,9 +106,9 @@ else:
                     4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
                     5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
-                    REGLAS CRÍTICAS Y ORDEN DE CAMPOS:
+                    REGLAS CRÍTICAS Y ORDEN ESTRICTO DE CAMPOS:
+                    - **TIPO:** Debe registrar obligatoriamente la frecuencia exacta (Ej: Semanal, Diario, Mensual o Catorcenal). Jamás dejar vacío.
                     - **INTERÉS:** La columna de interés monetario se omite por completo (se envía vacía). El porcentaje va exclusivamente en el campo `%`.
-                    - **TIPO:** Debe registrar estrictamente la frecuencia de pago (ej. Semanal, Diario, Mensual o Catorcenal).
                     - **¿AUMENTO?:** Registrar estrictamente 'Sí' o 'No'.
                     - **CONDICIÓN:** Registrar exactamente '{detalle_condicion}'.
                     - **ESTADO Y OBSERVACIÓN:** 
@@ -117,7 +117,7 @@ else:
                     - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la foto del recibo de luz.
                     - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta 5 últimas cuotas; semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
 
-                    Rellena todos los campos del esquema estructurado con absoluta precisión.
+                    Rellena todos los campos del esquema estructurado manteniendo el orden perfecto de las columnas.
                     """
                     contents.append(prompt_instrucciones)
 
@@ -159,7 +159,9 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado con la columna de interés vacía y los campos en orden exacto
+                        # Payload asegurando que 'tipo' tenga un valor por defecto si viniera vacío
+                        tipo_limpio = resultado.tipo if resultado.tipo else "Semanal"
+
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
@@ -172,8 +174,8 @@ else:
                             "monto": resultado.monto,
                             "aumento": resultado.aumento,
                             "porcentaje": resultado.porcentaje,
-                            "interes": "",  # Vacío para evitar el monto en dinero
-                            "tipo": resultado.tipo,
+                            "interes": "",  # Vacío
+                            "tipo": tipo_limpio,
                             "monto_cuota": resultado.monto_cuota,
                             "num_cuotas": resultado.num_cuotas,
                             "capacidad_pago": resultado.capacidad_pago,
