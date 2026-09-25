@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- ESQUEMA ESTRUCTURADO CON EXTRACCIÓN GARANTIZADA DE SUMINISTRO ---
+# --- ESQUEMA ESTRUCTURADO CON VALIDACIÓN FLEXIBLE DE FOTO ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, reglas de descuento actualizadas (diario: hasta 5 últimas cuotas; semanal >= 1 mes: última cuota), monto de cuota, capacidad de pago y nivel de riesgo como comentarios analíticos.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, reglas de descuento, monto de cuota, capacidad de pago, nivel de riesgo y la nota de regularización de foto borrosa si aplica.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
     codigo_suministro: str = Field(description="Número o código de suministro de luz extraído estrictamente de la fotografía del recibo de luz adjunta.")
     nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
@@ -21,7 +21,7 @@ class AuditoriaCredito(BaseModel):
     monto_cuota: str = Field(description="Monto exacto de cada cuota a pagar según la frecuencia.")
     nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 como métrica analítica de comentario.")
     capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero como comentario analítico no condicionante.")
-    estado_final: str = Field(description="Estrictamente uno de estos tres valores basado ÚNICAMENTE en normativas formales (edad menor a 66, reglas de descuento válidas, suministro válido y Sentinel sin moras activas graves): APROBADO, OBSERVADO o RECHAZADO.")
+    estado_final: str = Field(description="Estrictamente APROBADO, OBSERVADO o RECHAZADO. Si la foto borrosa es el único detalle, debe ser APROBADO con la nota de regularización al desembolso.")
 
 # --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(datos_dict):
@@ -103,18 +103,16 @@ else:
                     4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Diaria (lunes a viernes). Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
                     5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
-                    REGLAS CRÍTICAS Y POLÍTICAS ACTUALIZADAS DE DESCUENTO Y SUMINISTRO:
-                    - **CÓDIGO DE SUMINISTRO:** Es OBLIGATORIO ubicar y extraer el número o código de suministro de luz de la fotografía del recibo cargada. Revisa bien las imágenes para capturar este número exacto.
-                    - **POLÍTICA ACTUALIZADA DE DESCUENTO DE CUOTAS:**
-                      1. **Crédito Diario:** Se permite descontar hasta las **5 últimas cuotas**.
-                      2. **Crédito Semanal (a partir de 1 mes / >= 4 semanas de duración):** Se permite descontar la **última cuota**.
-                      3. Cualquier descuento dentro de estos rangos es completamente válido y aprobado.
-                    - **CAPACIDAD DE PAGO (INDICADOR NO CONDICIONANTE):** Es una métrica estadística y descriptiva de soporte analítico. **NUNCA** debe ser motivo para calificar un crédito como OBSERVADO o RECHAZADO por el hecho de que la cuota sea cercana o mayor.
-                    - **BURÓ EXPERIAN/SENTINEL:** Sin moras activas graves, el cliente es apto.
-                    - **EDAD:** RECHAZO AUTOMÁTICO si el titular tiene 66 años o más (>= 66 años) en individuales.
-                    - **SUMINISTRO (LUZ):** Valida titularidad (familiar con coincidencia de apellidos, conviviente o alquilada).
+                    REGLAS CRÍTICAS Y CRITERIO DE VALIDACIÓN FOTOGRÁFICA:
+                    - **CÓDIGO DE SUMINISTRO:** Es OBLIGATORIO ubicar y extraer el número o código de suministro de luz de la fotografía del recibo cargada.
+                    - **VALIDACIÓN DE FOTO DEL CLIENTE (ROSTRO):** Si la fotografía de la persona/rostro cargada se ve borrosa, movida o de baja calidad, **NO** es motivo de rechazo. 
+                      * Si esta es **la única falencia o detalle** en todo el expediente (estando todo lo demás en orden: edad, suministro, Sentinel, cuotas de descuento), el crédito se **APRUEBA**, pero debes agregar explícitamente en el dictamen y en el estado final la nota: `[Observación: Foto de cliente borrosa, se debe regularizar al momento del desembolso]`.
+                      * Si además de la foto borrosa existen **más falencias** (problemas en Sentinel, suministro incorrecto, exceso de cuotas, etc.), el crédito se califica directamente como **OBSERVADO**.
+                    - **POLÍTICA DE DESCUENTO DE CUOTAS:** Crédito diario hasta 5 últimas cuotas; crédito semanal a partir de 1 mes (>= 4 semanas) permite la última cuota.
+                    - **CAPACIDAD DE PAGO (INDICADOR NO CONDICIONANTE):** Métrica de soporte analítico, no condiciona por sí sola la aprobación.
+                    - **EDAD Y SENTINEL:** Menor de 66 años en individuales y Sentinel sin moras activas graves.
 
-                    Rellena todos los campos del esquema estructurado con absoluta precisión, separando nombres y apellidos, extrayendo obligatoriamente el código de suministro y aplicando los nuevos criterios de descuento.
+                    Rellena todos los campos del esquema estructurado con absoluta precisión, aplicando este criterio flexible para la fotografía del cliente.
                     """
                     contents.append(prompt_instrucciones)
 
@@ -156,7 +154,7 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado incluyendo el código de suministro en la posición exacta
+                        # Payload estructurado incluyendo el estado y la nota de regularización si aplica
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
