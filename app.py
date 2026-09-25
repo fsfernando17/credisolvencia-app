@@ -8,20 +8,24 @@ from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- ESQUEMA ESTRUCTURADO CON VALIDACIÓN FLEXIBLE DE FOTO ---
+# --- ESQUEMA ESTRUCTURADO CON NUEVAS COLUMNAS ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, reglas de descuento, monto de cuota, capacidad de pago, nivel de riesgo y la nota de regularización de foto borrosa si aplica.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, reglas de descuento, monto de cuota, capacidad de pago, nivel de riesgo y observaciones para subsanar.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
     codigo_suministro: str = Field(description="Número o código de suministro de luz extraído estrictamente de la fotografía del recibo de luz adjunta.")
     nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
     apellidos: str = Field(description="Apellidos completos del cliente (sin nombres).")
     monto: str = Field(description="Monto total del crédito solicitado con su símbolo o número.")
-    interes: str = Field(description="Tasa de interés aplicada según el producto.")
-    tipo_cuotas: str = Field(description="Frecuencia de pago obligatoriamente: Semanal, Mensual, Diario o Catorcenal.")
+    aumento: str = Field(description="Indicar estrictamente 'Sí' o 'No' si el crédito representa un aumento respecto al anterior.")
+    porcentaje: str = Field(description="Porcentaje de la tasa de interés (ej. 15% o 18%).")
+    interes: str = Field(description="Detalle o monto del interés calculado según el producto.")
+    tipo: str = Field(description="Frecuencia de pago obligatoriamente: Semanal, Mensual, Diario o Catorcenal.")
     monto_cuota: str = Field(description="Monto exacto de cada cuota a pagar según la frecuencia.")
-    nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 como métrica analítica de comentario.")
-    capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero como comentario analítico no condicionante.")
-    estado_final: str = Field(description="Estrictamente APROBADO, OBSERVADO o RECHAZADO. Si la foto borrosa es el único detalle, debe ser APROBADO con la nota de regularización al desembolso.")
+    num_cuotas: str = Field(description="Número total de cuotas o semanas del cronograma del crédito.")
+    nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 como métrica analítica.")
+    capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero.")
+    estado_final: str = Field(description="Estrictamente uno de estos tres valores: APROBADO, OBSERVADO o RECHAZADO.")
+    observacion_subsanar: str = Field(description="Detalle específico de las observaciones para subsanar (ej. 'Regularizar foto del cliente borrosa al momento del desembolso' o 'Ninguna').")
 
 # --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(datos_dict):
@@ -103,16 +107,16 @@ else:
                     4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Diaria (lunes a viernes). Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
                     5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
-                    REGLAS CRÍTICAS Y CRITERIO DE VALIDACIÓN FOTOGRÁFICA:
-                    - **CÓDIGO DE SUMINISTRO:** Es OBLIGATORIO ubicar y extraer el número o código de suministro de luz de la fotografía del recibo cargada.
-                    - **VALIDACIÓN DE FOTO DEL CLIENTE (ROSTRO):** Si la fotografía de la persona/rostro cargada se ve borrosa, movida o de baja calidad, **NO** es motivo de rechazo. 
-                      * Si esta es **la única falencia o detalle** en todo el expediente (estando todo lo demás en orden: edad, suministro, Sentinel, cuotas de descuento), el crédito se **APRUEBA**, pero debes agregar explícitamente en el dictamen y en el estado final la nota: `[Observación: Foto de cliente borrosa, se debe regularizar al momento del desembolso]`.
-                      * Si además de la foto borrosa existen **más falencias** (problemas en Sentinel, suministro incorrecto, exceso de cuotas, etc.), el crédito se califica directamente como **OBSERVADO**.
-                    - **POLÍTICA DE DESCUENTO DE CUOTAS:** Crédito diario hasta 5 últimas cuotas; crédito semanal a partir de 1 mes (>= 4 semanas) permite la última cuota.
-                    - **CAPACIDAD DE PAGO (INDICADOR NO CONDICIONANTE):** Métrica de soporte analítico, no condiciona por sí sola la aprobación.
-                    - **EDAD Y SENTINEL:** Menor de 66 años en individuales y Sentinel sin moras activas graves.
+                    REGLAS CRÍTICAS Y NUEVOS CAMPOS DE REGISTRO:
+                    - **¿AUMENTO?:** Analiza si el monto propuesto es mayor al monto actual del cliente. Si aplica, registra estrictamente 'Sí'; de lo contrario, 'No'.
+                    - **CONDICIÓN:** Registra exactamente el valor seleccionado ({detalle_condicion}).
+                    - **ESTADO Y OBSERVACIÓN:** 
+                      * El estado final debe ser estrictamente `APROBADO`, `OBSERVADO` o `RECHAZADO`.
+                      * **Validación de foto del cliente:** Si la foto del rostro del cliente es borrosa o movida pero todo lo demás está conforme, el crédito se **APROBADO** y en la columna de observaciones se anota: `Regularizar foto del cliente al momento del desembolso`. Si hay más falencias graves, el estado pasa a ser **OBSERVADO** o **RECHAZADO** con su respectivo comentario de subsanación.
+                    - **CÓDIGO DE SUMINISTRO:** Extrae obligatoriamente el número de suministro del recibo de luz.
+                    - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta 5 últimas cuotas; semanal a partir de 1 mes (>=4 semanas) permite la última cuota. La capacidad de pago es un indicador analítico no condicionante.
 
-                    Rellena todos los campos del esquema estructurado con absoluta precisión, aplicando este criterio flexible para la fotografía del cliente.
+                    Rellena todos los campos del esquema estructurado con absoluta precisión.
                     """
                     contents.append(prompt_instrucciones)
 
@@ -154,22 +158,26 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado incluyendo el estado y la nota de regularización si aplica
+                        # Payload estructurado con el orden exacto de las columnas de tu Google Sheet
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
+                            "condicion": detalle_condicion,
                             "producto": producto,
                             "dni": resultado.dni,
                             "codigo_suministro": resultado.codigo_suministro,
                             "nombre": resultado.nombres,
                             "apellidos": resultado.apellidos,
                             "monto": resultado.monto,
+                            "aumento": resultado.aumento,
+                            "porcentaje": resultado.porcentaje,
                             "interes": resultado.interes,
-                            "tipo_cuotas": resultado.tipo_cuotas,
+                            "tipo": resultado.tipo,
                             "monto_cuota": resultado.monto_cuota,
-                            "nivel_riesgo": str(resultado.nivel_riesgo),
+                            "num_cuotas": resultado.num_cuotas,
                             "capacidad_pago": resultado.capacidad_pago,
-                            "estado": f"{resultado.estado_final} [{detalle_condicion}]"
+                            "estado": resultado.estado_final,
+                            "observacion": resultado.observacion_subsanar
                         }
 
                         guardar_en_sheets(payload_sheet)
