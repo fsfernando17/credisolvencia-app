@@ -45,7 +45,7 @@ def guardar_en_sheets(datos_dict):
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha, fotos y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, fotos esenciales y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -86,20 +86,20 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Optimizando imágenes y ejecutando análisis con respaldo automático..."):
+            with st.spinner("Optimizando imágenes y ejecutando análisis con motor estable..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Compresión y optimización automática de fotos
+                    # Compresión agresiva para evitar saturar el tamaño del paquete HTTP
                     for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((1200, 1200))
+                        img.thumbnail((1000, 1000)) # Tamaño ideal y ligero
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=80)
+                        img.save(buf, format="JPEG", quality=75) # Calidad optimizada
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -130,8 +130,8 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Modelos en orden de respaldo automático si uno falla por alta demanda
-                    modelos_a_probar = ["gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]
+                    # Modelos de producción oficiales altamente estables
+                    modelos_a_probar = ["gemini-2.0-flash", "gemini-1.5-flash"]
                     response = None
                     ultimo_error = ""
 
@@ -187,7 +187,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Todos los modelos alternativos están ocupados temporalmente. Vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ Error al procesar el expediente. Demasiados archivos pesados o servidores ocupados. Intenta adjuntar solo las fotos esenciales. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
