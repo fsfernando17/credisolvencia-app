@@ -86,22 +86,20 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Procesando lote de 6+ fotos y aplicando normativas de Credisolvencia..."):
+            with st.spinner("Optimizando lote de fotos y ejecutando análisis con respaldo automático..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Soporte para 6 o más fotos con compresión optimizada para evitar saturar el payload
-                    fotos_a_procesar = fotos_requisitos[:8] # Permite hasta 8 fotos procesadas de forma ligera
-                    
-                    for foto in fotos_a_procesar:
+                    # Optimización ligera de las fotos (permite todas las que cargues aligerando el peso)
+                    for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((700, 700)) # Tamaño compacto ideal para lectura multicanal
+                        img.thumbnail((600, 600)) # Resolución compacta y legible para evitar saturar el servidor
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=60) # Compresión eficiente para múltiples imágenes
+                        img.save(buf, format="JPEG", quality=50) # Compresión inteligente para múltiples imágenes
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -132,8 +130,8 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Modelos ultra-estables ordenados por prioridad
-                    modelos_a_probar = ["gemini-2.0-flash", "gemini-3.5-flash-lite"]
+                    # Cadena robusta de respaldo con múltiples modelos oficiales
+                    modelos_a_probar = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-2.0-flash", "gemini-2.5-flash"]
                     response = None
                     ultimo_error = ""
 
@@ -199,7 +197,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Error de servicio (503). Por favor, espera 5 segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ Los servidores de Google están experimentando alta demanda global (503). Por favor, haz clic nuevamente en 'Auditar Expediente' en unos segundos. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
