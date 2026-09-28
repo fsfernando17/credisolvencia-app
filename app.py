@@ -46,7 +46,7 @@ def guardar_en_sheets(datos_dict):
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha, fotos y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, tus 6+ fotos y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -87,20 +87,20 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Procesando expediente con sistema anti-saturación y respaldo inteligente..."):
+            with st.spinner("Optimizando lote de 6+ fotos y procesando expediente..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Compresión y optimización de todas las fotos cargadas
+                    # COMPRESIÓN EXTREMA: Permite procesar múltiples fotos aligerando el peso al 95%
                     for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((700, 700))
+                        img.thumbnail((400, 400)) # Resolución compacta ideal para evitar errores de payload
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=55)
+                        img.save(buf, format="JPEG", quality=35) # Compresión fuerte para pasar sin saturar el servidor
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -131,14 +131,15 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # CADENA DE RESPALDO MULTIMODELO CON BACKEXPONENTIAL + JITTER (Recomendación oficial Google)
-                    modelos_a_probar = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.5-flash-lite"]
+                    # MODELO PRINCIPAL ULTRA-ESTABLE + RESPALDO
+                    modelos_a_probar = ["gemini-2.0-flash", "gemini-3.5-flash-lite"]
                     response = None
                     ultimo_error = ""
                     exito_general = False
 
                     for modelo in modelos_a_probar:
-                        for intento in range(4):  # 4 intentos por cada modelo
+                        tiempo_espera = 2
+                        for intento in range(3):
                             try:
                                 response = client.models.generate_content(
                                     model=modelo,
@@ -154,12 +155,11 @@ else:
                             except Exception as err:
                                 ultimo_error = str(err)
                                 if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
-                                    # Cálculo de espera exponencial con jitter aleatorio
-                                    delay = min(20, (2 ** intento)) + random.uniform(0.5, 1.5)
-                                    time.sleep(delay)
+                                    time.sleep(tiempo_espera)
+                                    tiempo_espera *= 2
                                     continue
                                 else:
-                                    break # Si es error 400 u otro definitivo, pasa al siguiente modelo
+                                    break
                         if exito_general:
                             break
 
@@ -198,7 +198,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Los servidores de Google están saturados temporalmente. El sistema intentó múltiples modelos sin éxito. Por favor, espera unos segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ El servidor de Google rechazó el tamaño del paquete multimedia. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
