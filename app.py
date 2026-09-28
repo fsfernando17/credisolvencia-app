@@ -2,6 +2,7 @@ import streamlit as st
 from google import genai
 from google.genai import types
 import time
+import random
 from datetime import datetime, timezone, timedelta
 import requests
 from pydantic import BaseModel, Field
@@ -45,7 +46,7 @@ def guardar_en_sheets(datos_dict):
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha, tus fotos y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, fotos y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -86,20 +87,20 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Optimizando lote de fotos y ejecutando análisis con respaldo automático..."):
+            with st.spinner("Procesando expediente con sistema anti-saturación y respaldo inteligente..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Optimización ligera de las fotos (permite todas las que cargues aligerando el peso)
+                    # Compresión y optimización de todas las fotos cargadas
                     for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((600, 600)) # Resolución compacta y legible para evitar saturar el servidor
+                        img.thumbnail((700, 700))
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=50) # Compresión inteligente para múltiples imágenes
+                        img.save(buf, format="JPEG", quality=55)
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -124,21 +125,20 @@ else:
                       * Estado final: `APROBADO`, `OBSERVADO` o `RECHAZADO`.
                       * Si la foto del rostro del cliente es borrosa pero todo lo demás está conforme, el crédito se **APROBADO** y en observaciones se anota: `Regularizar foto del cliente al momento del desembolso`. Si hay más falencias graves, pasa a **OBSERVADO**.
                     - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la foto del recibo de luz.
-                    - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta las 5 últimas cuotas; crédito semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
+                    - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta las 5 últimas cuotas; semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
 
                     Rellena todos los campos del esquema estructurado manteniendo el orden perfecto de las columnas.
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Cadena robusta de respaldo con múltiples modelos oficiales
-                    modelos_a_probar = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-2.0-flash", "gemini-2.5-flash"]
+                    # CADENA DE RESPALDO MULTIMODELO CON BACKEXPONENTIAL + JITTER (Recomendación oficial Google)
+                    modelos_a_probar = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.5-flash-lite"]
                     response = None
                     ultimo_error = ""
+                    exito_general = False
 
                     for modelo in modelos_a_probar:
-                        tiempo_espera = 2
-                        exito_modelo = False
-                        for intento in range(2):
+                        for intento in range(4):  # 4 intentos por cada modelo
                             try:
                                 response = client.models.generate_content(
                                     model=modelo,
@@ -149,17 +149,18 @@ else:
                                     ),
                                 )
                                 if response and response.parsed:
-                                    exito_modelo = True
+                                    exito_general = True
                                     break
                             except Exception as err:
                                 ultimo_error = str(err)
                                 if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
-                                    time.sleep(tiempo_espera)
-                                    tiempo_espera *= 2
+                                    # Cálculo de espera exponencial con jitter aleatorio
+                                    delay = min(20, (2 ** intento)) + random.uniform(0.5, 1.5)
+                                    time.sleep(delay)
                                     continue
                                 else:
-                                    break
-                        if exito_modelo:
+                                    break # Si es error 400 u otro definitivo, pasa al siguiente modelo
+                        if exito_general:
                             break
 
                     if response and response.parsed:
@@ -197,7 +198,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Los servidores de Google están experimentando alta demanda global (503). Por favor, haz clic nuevamente en 'Auditar Expediente' en unos segundos. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ Los servidores de Google están saturados temporalmente. El sistema intentó múltiples modelos sin éxito. Por favor, espera unos segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
