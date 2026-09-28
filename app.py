@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
-# --- ESQUEMA ESTRUCTURADO BLINDADO ---
+# --- ESQUEMA ESTRUCTURADO PERFECTAMENTE ALINEADO ---
 class AuditoriaCredito(BaseModel):
     dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, reglas de descuento, monto de cuota, capacidad de pago, nivel de riesgo y observaciones para subsanar.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
@@ -43,7 +43,7 @@ def guardar_en_sheets(datos_dict):
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha, fotos y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, fotos esenciales y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -84,7 +84,7 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Analizando expediente y aplicando normativas de Credisolvencia..."):
+            with st.spinner("Analizando expediente y aplicando normativas de Credisolvencia... (Reintentando si hay alta demanda)"):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
@@ -121,11 +121,11 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema con Backoff Exponencial y el modelo activo gemini-3.5-flash-lite
-                    max_reintentos = 5
+                    # Sistema con Backoff Exponencial robusto para errores 503 o 429
+                    max_reintentos = 4
                     response = None
                     ultimo_error = ""
-                    tiempo_espera = 3
+                    tiempo_espera = 4
 
                     for intento in range(max_reintentos):
                         try:
@@ -143,7 +143,7 @@ else:
                             ultimo_error = str(err)
                             if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
                                 time.sleep(tiempo_espera)
-                                tiempo_espera *= 2
+                                tiempo_espera *= 2  # Espera exponencial (4s, 8s, 16s...)
                                 continue
                             else:
                                 break
@@ -159,9 +159,7 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload asegurando que 'tipo' tenga un valor por defecto si viniera vacío
-                        tipo_limpio = resultado.tipo if resultado.tipo else "Semanal"
-
+                        # Payload estructurado
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
@@ -175,7 +173,7 @@ else:
                             "aumento": resultado.aumento,
                             "porcentaje": resultado.porcentaje,
                             "interes": "",  # Vacío
-                            "tipo": tipo_limpio,
+                            "tipo": resultado.tipo or "Semanal",
                             "monto_cuota": resultado.monto_cuota,
                             "num_cuotas": resultado.num_cuotas,
                             "capacidad_pago": resultado.capacidad_pago,
@@ -185,7 +183,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"Error al procesar la respuesta estructurada. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ El servidor de Google está saturado temporalmente (Error 503). Por favor, espera unos segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
 
                 except Exception as e:
-                    st.error(f"Error al procesar la solicitud: {str(e)}")
+                    st.error(f"Error crítico al procesar la solicitud: {str(e)}")
