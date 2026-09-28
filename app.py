@@ -5,6 +5,8 @@ import time
 from datetime import datetime, timezone, timedelta
 import requests
 from pydantic import BaseModel, Field
+from PIL import Image
+import io
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
@@ -43,7 +45,7 @@ def guardar_en_sheets(datos_dict):
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha, fotos esenciales y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, fotos y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -84,15 +86,22 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Analizando expediente y aplicando normativas de Credisolvencia... (Reintentando si hay alta demanda)"):
+            with st.spinner("Optimizando imágenes y analizando expediente con normativas de Credisolvencia..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
+                    # Compresión y optimización automática de fotos para evitar bloqueos
                     for foto in fotos_requisitos:
-                        img_bytes = foto.read()
-                        contents.append(types.Part.from_bytes(data=img_bytes, mime_type=foto.type))
+                        img = Image.open(foto)
+                        img.thumbnail((1200, 1200)) # Redimensionar manteniendo proporción ideal
+                        if img.mode in ("RGBA", "P"):
+                            img = img.convert("RGB")
+                        buf = io.BytesIO()
+                        img.save(buf, format="JPEG", quality=80)
+                        img_bytes = buf.getvalue()
+                        contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
                     prompt_instrucciones = f"""
                     Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita rigurosamente la solicitud:
@@ -121,11 +130,11 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema con Backoff Exponencial robusto para errores 503 o 429
-                    max_reintentos = 4
+                    # Sistema con Backoff Exponencial robusto
+                    max_reintentos = 3
                     response = None
                     ultimo_error = ""
-                    tiempo_espera = 4
+                    tiempo_espera = 2
 
                     for intento in range(max_reintentos):
                         try:
@@ -141,12 +150,9 @@ else:
                                 break
                         except Exception as err:
                             ultimo_error = str(err)
-                            if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
-                                time.sleep(tiempo_espera)
-                                tiempo_espera *= 2  # Espera exponencial (4s, 8s, 16s...)
-                                continue
-                            else:
-                                break
+                            time.sleep(tiempo_espera)
+                            tiempo_espera *= 2
+                            continue
 
                     if response and response.parsed:
                         resultado = response.parsed
@@ -183,7 +189,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ El servidor de Google está saturado temporalmente (Error 503). Por favor, espera unos segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ Error al procesar el expediente. Detalle técnico: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
