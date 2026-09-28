@@ -86,7 +86,7 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Analizando expediente y aplicando normativas de Credisolvencia..."):
+            with st.spinner("Optimizando imágenes y procesando con sistema de reintentos automáticos..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
@@ -130,29 +130,37 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Uso del modelo oficial estable del proyecto con reintentos
-                    max_reintentos = 3
+                    # Sistema inteligente con modelos de respaldo y reintentos exponenciales
+                    modelos_a_probar = ["gemini-3.5-flash-lite", "gemini-2.0-flash"]
                     response = None
                     ultimo_error = ""
-                    tiempo_espera = 2
 
-                    for intento in range(max_reintentos):
-                        try:
-                            response = client.models.generate_content(
-                                model="gemini-3.5-flash-lite",
-                                contents=contents,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    response_schema=AuditoriaCredito,
-                                ),
-                            )
-                            if response and response.parsed:
-                                break
-                        except Exception as err:
-                            ultimo_error = str(err)
-                            time.sleep(tiempo_espera)
-                            tiempo_espera *= 2
-                            continue
+                    for modelo in modelos_a_probar:
+                        tiempo_espera = 3
+                        exito_modelo = False
+                        for intento in range(3):  # 3 intentos por modelo
+                            try:
+                                response = client.models.generate_content(
+                                    model=modelo,
+                                    contents=contents,
+                                    config=types.GenerateContentConfig(
+                                        response_mime_type="application/json",
+                                        response_schema=AuditoriaCredito,
+                                    ),
+                                )
+                                if response and response.parsed:
+                                    exito_modelo = True
+                                    break
+                            except Exception as err:
+                                ultimo_error = str(err)
+                                if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
+                                    time.sleep(tiempo_espera)
+                                    tiempo_espera *= 2  # Espera 3s, luego 6s, luego 12s
+                                    continue
+                                else:
+                                    break
+                        if exito_modelo:
+                            break
 
                     if response and response.parsed:
                         resultado = response.parsed
@@ -189,7 +197,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Error al procesar el expediente. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ Los servidores de Google están experimentando congestión temporal. Por favor, espera 5 segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
