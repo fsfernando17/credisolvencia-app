@@ -7,6 +7,8 @@ import requests
 from pydantic import BaseModel, Field
 from PIL import Image
 import io
+import tempfile
+import os
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
@@ -86,20 +88,26 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Procesando expediente con el modelo de alta capacidad gemini-3.8-flash..."):
+            with st.spinner("Procesando PDF con la File API oficial y optimizando fotografías..."):
+                temp_pdf_path = None
                 try:
-                    contents = []
-                    pdf_bytes = sentinel_pdf.read()
-                    contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
+                    # Guardar y subir el PDF mediante Google Files API para evitar bloqueos por tamaño
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                        tmp_file.write(sentinel_pdf.read())
+                        temp_pdf_path = tmp_file.name
+
+                    uploaded_pdf = client.files.upload(file=temp_pdf_path)
                     
-                    # Optimización de fotos manteniendo soporte para 6+ imágenes
+                    contents = [uploaded_pdf]
+                    
+                    # Compresión ligera para las 6+ fotos
                     for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((600, 600))
+                        img.thumbnail((500, 500))
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=50)
+                        img.save(buf, format="JPEG", quality=45)
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -130,8 +138,8 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Cadena con el nuevo modelo principal gemini-3.8-flash y respaldos
-                    modelos_a_probar = ["gemini-3.8-flash", "gemini-2.0-flash", "gemini-3.5-flash-lite"]
+                    # Modelos estables con reintentos
+                    modelos_a_probar = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"]
                     response = None
                     ultimo_error = ""
                     exito_general = False
@@ -161,6 +169,10 @@ else:
                                     break
                         if exito_general:
                             break
+
+                    # Limpiar archivo temporal
+                    if temp_pdf_path and os.path.exists(temp_pdf_path):
+                        os.remove(temp_pdf_path)
 
                     if response and response.parsed:
                         resultado = response.parsed
@@ -195,7 +207,9 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ El servidor experimenta alta demanda. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ El servidor de Google sigue congestionado (503). Detalle: {ultimo_error}")
 
                 except Exception as e:
+                    if temp_pdf_path and os.path.exists(temp_pdf_path):
+                        os.remove(temp_pdf_path)
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
