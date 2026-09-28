@@ -45,7 +45,7 @@ def guardar_en_sheets(datos_dict):
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha, fotos esenciales y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, fotos y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -86,20 +86,20 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Optimizando imágenes y ejecutando análisis con motor estable..."):
+            with st.spinner("Analizando expediente y aplicando normativas de Credisolvencia..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Compresión agresiva para evitar saturar el tamaño del paquete HTTP
+                    # Compresión y optimización automática de fotos
                     for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((1000, 1000)) # Tamaño ideal y ligero
+                        img.thumbnail((1200, 1200))
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=75) # Calidad optimizada
+                        img.save(buf, format="JPEG", quality=80)
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -124,21 +124,22 @@ else:
                       * Estado final: `APROBADO`, `OBSERVADO` o `RECHAZADO`.
                       * Si la foto del rostro del cliente es borrosa pero todo lo demás está conforme, el crédito se **APROBADO** y en observaciones se anota: `Regularizar foto del cliente al momento del desembolso`. Si hay más falencias graves, pasa a **OBSERVADO**.
                     - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la foto del recibo de luz.
-                    - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta 5 últimas cuotas; semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
+                    - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta las 5 últimas cuotas; crédito semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
 
                     Rellena todos los campos del esquema estructurado manteniendo el orden perfecto de las columnas.
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Modelos de producción oficiales altamente estables
-                    modelos_a_probar = ["gemini-2.0-flash", "gemini-1.5-flash"]
+                    # Uso del modelo oficial estable del proyecto con reintentos
+                    max_reintentos = 3
                     response = None
                     ultimo_error = ""
+                    tiempo_espera = 2
 
-                    for modelo in modelos_a_probar:
+                    for intento in range(max_reintentos):
                         try:
                             response = client.models.generate_content(
-                                model=modelo,
+                                model="gemini-3.5-flash-lite",
                                 contents=contents,
                                 config=types.GenerateContentConfig(
                                     response_mime_type="application/json",
@@ -149,7 +150,8 @@ else:
                                 break
                         except Exception as err:
                             ultimo_error = str(err)
-                            time.sleep(2)
+                            time.sleep(tiempo_espera)
+                            tiempo_espera *= 2
                             continue
 
                     if response and response.parsed:
@@ -187,7 +189,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Error al procesar el expediente. Demasiados archivos pesados o servidores ocupados. Intenta adjuntar solo las fotos esenciales. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ Error al procesar el expediente. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
