@@ -7,6 +7,7 @@ import requests
 from pydantic import BaseModel, Field
 from PIL import Image
 import io
+import pypdf
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
@@ -86,27 +87,37 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Analizando expediente con gemini-2.0-flash..."):
+            with st.spinner("Leyendo Sentinel y optimizando fotografías..."):
                 try:
+                    # 1. Extracción local del texto del PDF Sentinel (Cero peso en la API)
+                    reader = pypdf.PdfReader(sentinel_pdf)
+                    sentinel_texto = ""
+                    for page in reader.pages:
+                        texto_pagina = page.extract_text()
+                        if texto_pagina:
+                            sentinel_texto += texto_pagina + "\n"
+
                     contents = []
-                    pdf_bytes = sentinel_pdf.read()
-                    contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
-                    
-                    # Optimización ligera para soportar múltiples fotos sin bloquearse
+
+                    # 2. Compresión y adición optimizada de las 6+ fotos
                     for foto in fotos_requisitos:
                         img = Image.open(foto)
                         img.thumbnail((600, 600))
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=50)
+                        img.save(buf, format="JPEG", quality=55)
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
+                    # 3. Prompt estructurado integrando el texto del Sentinel extraído
                     prompt_instrucciones = f"""
                     Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita rigurosamente la solicitud:
                     Modalidad: {modalidad} | Producto Seleccionado: {producto} | Condición: {detalle_condicion}
                     Ficha del Asesor: {ficha_texto}
+
+                    CONTENIDO DEL REPORTE SENTINEL (BURÓ DE CRÉDITO):
+                    {sentinel_texto}
 
                     POLÍTICAS OFICIALES POR PRODUCTO:
                     1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem. Requisito: Historial Sentinel normal/aceptable y negocio >1 año.
@@ -130,26 +141,15 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Llamada directa y limpia con gemini-2.0-flash y reintento simple
-                    response = None
-                    ultimo_error = ""
-                    
-                    for intento in range(3):
-                        try:
-                            response = client.models.generate_content(
-                                model="gemini-2.0-flash",
-                                contents=contents,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    response_schema=AuditoriaCredito,
-                                ),
-                            )
-                            if response and response.parsed:
-                                break
-                        except Exception as err:
-                            ultimo_error = str(err)
-                            time.sleep(3)
-                            continue
+                    # Llamada directa al modelo oficial gemini-2.0-flash
+                    response = client.models.generate_content(
+                        model="gemini-2.0-flash",
+                        contents=contents,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=AuditoriaCredito,
+                        ),
+                    )
 
                     if response and response.parsed:
                         resultado = response.parsed
@@ -184,7 +184,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ El servidor de Google está saturado (503). Por favor, espera 10 segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
+                        st.error("⚠️ No se pudo obtener una respuesta estructurada del modelo.")
 
                 except Exception as e:
-                    st.error(f"Error crítico al procesar la solicitud: {str(e)}")
+                    st.error(f"Error al procesar el expediente: {str(e)}")
