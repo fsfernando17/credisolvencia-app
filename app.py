@@ -46,7 +46,7 @@ def guardar_en_sheets(datos_dict):
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha, tus 6+ fotos y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, tus 6 fotos y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -87,20 +87,21 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Optimizando lote de 6+ fotos y procesando expediente..."):
+            with st.spinner("Procesando expediente con optimización de alta velocidad..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # COMPRESIÓN EXTREMA: Permite procesar múltiples fotos aligerando el peso al 95%
-                    for foto in fotos_requisitos:
+                    # Permite hasta 6 fotos procesadas con compresión extrema para evitar 503
+                    fotos_a_procesar = fotos_requisitos[:6]
+                    for foto in fotos_a_procesar:
                         img = Image.open(foto)
-                        img.thumbnail((400, 400)) # Resolución compacta ideal para evitar errores de payload
+                        img.thumbnail((350, 350)) # Miniatura ultra-ligera pero perfectamente legible
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=35) # Compresión fuerte para pasar sin saturar el servidor
+                        img.save(buf, format="JPEG", quality=30) # Compresión fuerte para pasar sin saturar
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -124,14 +125,14 @@ else:
                     - **ESTADO Y OBSERVACIÓN:** 
                       * Estado final: `APROBADO`, `OBSERVADO` o `RECHAZADO`.
                       * Si la foto del rostro del cliente es borrosa pero todo lo demás está conforme, el crédito se **APROBADO** y en observaciones se anota: `Regularizar foto del cliente al momento del desembolso`. Si hay más falencias graves, pasa a **OBSERVADO**.
-                    - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la foto del recibo de luz.
+                    - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la fotografía del recibo de luz.
                     - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta las 5 últimas cuotas; semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
 
                     Rellena todos los campos del esquema estructurado manteniendo el orden perfecto de las columnas.
                     """
                     contents.append(prompt_instrucciones)
 
-                    # MODELO PRINCIPAL ULTRA-ESTABLE + RESPALDO
+                    # Modelos estables con reintentos exponenciales
                     modelos_a_probar = ["gemini-2.0-flash", "gemini-3.5-flash-lite"]
                     response = None
                     ultimo_error = ""
@@ -198,7 +199,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ El servidor de Google rechazó el tamaño del paquete multimedia. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ El servidor de Google sigue congestionado (503). Por favor, intenta de nuevo en unos segundos. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
