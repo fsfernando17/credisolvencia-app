@@ -7,8 +7,6 @@ import requests
 from pydantic import BaseModel, Field
 from PIL import Image
 import io
-import tempfile
-import os
 
 st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", layout="centered")
 
@@ -88,26 +86,20 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Procesando PDF con la File API oficial y optimizando fotografías..."):
-                temp_pdf_path = None
+            with st.spinner("Analizando expediente con gemini-2.0-flash..."):
                 try:
-                    # Guardar y subir el PDF mediante Google Files API para evitar bloqueos por tamaño
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                        tmp_file.write(sentinel_pdf.read())
-                        temp_pdf_path = tmp_file.name
-
-                    uploaded_pdf = client.files.upload(file=temp_pdf_path)
+                    contents = []
+                    pdf_bytes = sentinel_pdf.read()
+                    contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    contents = [uploaded_pdf]
-                    
-                    # Compresión ligera para las 6+ fotos
+                    # Optimización ligera para soportar múltiples fotos sin bloquearse
                     for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((500, 500))
+                        img.thumbnail((600, 600))
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=45)
+                        img.save(buf, format="JPEG", quality=50)
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -138,41 +130,26 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Modelos estables con reintentos
-                    modelos_a_probar = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"]
+                    # Llamada directa y limpia con gemini-2.0-flash y reintento simple
                     response = None
                     ultimo_error = ""
-                    exito_general = False
-
-                    for modelo in modelos_a_probar:
-                        tiempo_espera = 2
-                        for intento in range(3):
-                            try:
-                                response = client.models.generate_content(
-                                    model=modelo,
-                                    contents=contents,
-                                    config=types.GenerateContentConfig(
-                                        response_mime_type="application/json",
-                                        response_schema=AuditoriaCredito,
-                                    ),
-                                )
-                                if response and response.parsed:
-                                    exito_general = True
-                                    break
-                            except Exception as err:
-                                ultimo_error = str(err)
-                                if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
-                                    time.sleep(tiempo_espera)
-                                    tiempo_espera *= 2
-                                    continue
-                                else:
-                                    break
-                        if exito_general:
-                            break
-
-                    # Limpiar archivo temporal
-                    if temp_pdf_path and os.path.exists(temp_pdf_path):
-                        os.remove(temp_pdf_path)
+                    
+                    for intento in range(3):
+                        try:
+                            response = client.models.generate_content(
+                                model="gemini-2.0-flash",
+                                contents=contents,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    response_schema=AuditoriaCredito,
+                                ),
+                            )
+                            if response and response.parsed:
+                                break
+                        except Exception as err:
+                            ultimo_error = str(err)
+                            time.sleep(3)
+                            continue
 
                     if response and response.parsed:
                         resultado = response.parsed
@@ -207,9 +184,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ El servidor de Google sigue congestionado (503). Detalle: {ultimo_error}")
+                        st.error(f"⚠️ El servidor de Google está saturado (503). Por favor, espera 10 segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
 
                 except Exception as e:
-                    if temp_pdf_path and os.path.exists(temp_pdf_path):
-                        os.remove(temp_pdf_path)
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
