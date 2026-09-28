@@ -86,20 +86,20 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Optimizando imágenes y procesando con sistema de reintentos automáticos..."):
+            with st.spinner("Comprimiendo imágenes y procesando expediente con motor estable..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Compresión y optimización automática de fotos
+                    # Compresión altamente eficiente para aligerar el peso de las fotos
                     for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((1200, 1200))
+                        img.thumbnail((800, 800)) # Resolución óptima para lectura rápida sin sobrecargar
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=80)
+                        img.save(buf, format="JPEG", quality=65) # Compresión fuerte para evitar 503
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -130,15 +130,15 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema inteligente con modelos de respaldo y reintentos exponenciales
-                    modelos_a_probar = ["gemini-3.5-flash-lite", "gemini-2.0-flash"]
+                    # Modelos de producción de alta disponibilidad con reintentos
+                    modelos_a_probar = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-3.5-flash-lite"]
                     response = None
                     ultimo_error = ""
 
                     for modelo in modelos_a_probar:
-                        tiempo_espera = 3
+                        tiempo_espera = 2
                         exito_modelo = False
-                        for intento in range(3):  # 3 intentos por modelo
+                        for intento in range(2):
                             try:
                                 response = client.models.generate_content(
                                     model=modelo,
@@ -155,7 +155,7 @@ else:
                                 ultimo_error = str(err)
                                 if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
                                     time.sleep(tiempo_espera)
-                                    tiempo_espera *= 2  # Espera 3s, luego 6s, luego 12s
+                                    tiempo_espera *= 2
                                     continue
                                 else:
                                     break
@@ -197,7 +197,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Los servidores de Google están experimentando congestión temporal. Por favor, espera 5 segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ Los servidores están al límite por la cantidad de imágenes adjuntas. Prueba adjuntar solo las fotos clave (DNI, Luz, Negocio) y vuelve a intentar. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
