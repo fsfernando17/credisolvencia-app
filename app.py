@@ -2,7 +2,6 @@ import streamlit as st
 from google import genai
 from google.genai import types
 import time
-import random
 from datetime import datetime, timezone, timedelta
 import requests
 from pydantic import BaseModel, Field
@@ -46,7 +45,7 @@ def guardar_en_sheets(datos_dict):
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha, tus 6 fotos y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, tus fotos y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -87,21 +86,20 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Procesando expediente con optimización de alta velocidad..."):
+            with st.spinner("Procesando expediente con el modelo de alta capacidad gemini-3.8-flash..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Permite hasta 6 fotos procesadas con compresión extrema para evitar 503
-                    fotos_a_procesar = fotos_requisitos[:6]
-                    for foto in fotos_a_procesar:
+                    # Optimización de fotos manteniendo soporte para 6+ imágenes
+                    for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((350, 350)) # Miniatura ultra-ligera pero perfectamente legible
+                        img.thumbnail((600, 600))
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=30) # Compresión fuerte para pasar sin saturar
+                        img.save(buf, format="JPEG", quality=50)
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -132,8 +130,8 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Modelos estables con reintentos exponenciales
-                    modelos_a_probar = ["gemini-2.0-flash", "gemini-3.5-flash-lite"]
+                    # Cadena con el nuevo modelo principal gemini-3.8-flash y respaldos
+                    modelos_a_probar = ["gemini-3.8-flash", "gemini-2.0-flash", "gemini-3.5-flash-lite"]
                     response = None
                     ultimo_error = ""
                     exito_general = False
@@ -171,11 +169,9 @@ else:
                         st.markdown("---")
                         st.markdown(resultado.dictamen_markdown)
                         
-                        # Hora exacta de Perú (UTC-5)
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado exacto para tus 18 columnas
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
@@ -199,7 +195,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ El servidor de Google sigue congestionado (503). Por favor, intenta de nuevo en unos segundos. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ El servidor experimenta alta demanda. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
