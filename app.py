@@ -86,16 +86,16 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Optimizando imágenes y analizando expediente con normativas de Credisolvencia..."):
+            with st.spinner("Optimizando imágenes y ejecutando análisis con respaldo automático..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Compresión y optimización automática de fotos para evitar bloqueos
+                    # Compresión y optimización automática de fotos
                     for foto in fotos_requisitos:
                         img = Image.open(foto)
-                        img.thumbnail((1200, 1200)) # Redimensionar manteniendo proporción ideal
+                        img.thumbnail((1200, 1200))
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
@@ -130,16 +130,15 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Sistema con Backoff Exponencial robusto
-                    max_reintentos = 3
+                    # Modelos en orden de respaldo automático si uno falla por alta demanda
+                    modelos_a_probar = ["gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]
                     response = None
                     ultimo_error = ""
-                    tiempo_espera = 2
 
-                    for intento in range(max_reintentos):
+                    for modelo in modelos_a_probar:
                         try:
                             response = client.models.generate_content(
-                                model="gemini-3.5-flash-lite",
+                                model=modelo,
                                 contents=contents,
                                 config=types.GenerateContentConfig(
                                     response_mime_type="application/json",
@@ -150,8 +149,7 @@ else:
                                 break
                         except Exception as err:
                             ultimo_error = str(err)
-                            time.sleep(tiempo_espera)
-                            tiempo_espera *= 2
+                            time.sleep(2)
                             continue
 
                     if response and response.parsed:
@@ -189,7 +187,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Error al procesar el expediente. Detalle técnico: {ultimo_error}")
+                        st.error(f"⚠️ Todos los modelos alternativos están ocupados temporalmente. Vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
