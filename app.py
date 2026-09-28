@@ -45,7 +45,7 @@ def guardar_en_sheets(datos_dict):
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
-st.write("Sube la ficha, fotos y el PDF de Sentinel para emitir el dictamen automático.")
+st.write("Sube la ficha, tus fotos y el PDF de Sentinel para emitir el dictamen automático.")
 
 # Seguridad de acceso
 clave_correcta = st.secrets.get("CLAVE_TRABAJADORES", "")
@@ -86,20 +86,22 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Comprimiendo imágenes y procesando expediente con motor estable..."):
+            with st.spinner("Procesando lote de 6+ fotos y aplicando normativas de Credisolvencia..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
                     contents.append(types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"))
                     
-                    # Compresión altamente eficiente para aligerar el peso de las fotos
-                    for foto in fotos_requisitos:
+                    # Soporte para 6 o más fotos con compresión optimizada para evitar saturar el payload
+                    fotos_a_procesar = fotos_requisitos[:8] # Permite hasta 8 fotos procesadas de forma ligera
+                    
+                    for foto in fotos_a_procesar:
                         img = Image.open(foto)
-                        img.thumbnail((800, 800)) # Resolución óptima para lectura rápida sin sobrecargar
+                        img.thumbnail((700, 700)) # Tamaño compacto ideal para lectura multicanal
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         buf = io.BytesIO()
-                        img.save(buf, format="JPEG", quality=65) # Compresión fuerte para evitar 503
+                        img.save(buf, format="JPEG", quality=60) # Compresión eficiente para múltiples imágenes
                         img_bytes = buf.getvalue()
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
@@ -130,8 +132,8 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Modelos de producción de alta disponibilidad con reintentos
-                    modelos_a_probar = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-3.5-flash-lite"]
+                    # Modelos ultra-estables ordenados por prioridad
+                    modelos_a_probar = ["gemini-2.0-flash", "gemini-3.5-flash-lite"]
                     response = None
                     ultimo_error = ""
 
@@ -173,7 +175,7 @@ else:
                         zona_peru = timezone(timedelta(hours=-5))
                         fecha_peru = datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Payload estructurado
+                        # Payload estructurado exacto para tus 18 columnas
                         payload_sheet = {
                             "fecha": fecha_peru,
                             "tipo_credito": modalidad,
@@ -197,7 +199,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Los servidores están al límite por la cantidad de imágenes adjuntas. Prueba adjuntar solo las fotos clave (DNI, Luz, Negocio) y vuelve a intentar. Detalle: {ultimo_error}")
+                        st.error(f"⚠️ Error de servicio (503). Por favor, espera 5 segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
