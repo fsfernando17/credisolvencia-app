@@ -12,7 +12,7 @@ st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", l
 
 # --- ESQUEMA ESTRUCTURADO PERFECTAMENTE ALINEADO ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, cotejo de direcciones (Suministro vs DNI), referencias de otras entidades, boletas a nombre del titular/familiar, foto del cliente, capacidad de pago, nivel de riesgo y conclusiones de aprobación.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel (aplicando regla de rechazo para CPP/DEF/DUD y Pérdida <365 días, aceptando Pérdida >365 días), validación de luz, cotejo de direcciones, pagos históricos antes de las 12 m. para renovaciones, titularidad, foto del cliente, capacidad de pago y conclusión.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
     codigo_suministro: str = Field(description="Número o código de suministro de luz extraído estrictamente de la fotografía del recibo de luz adjunta.")
     nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
@@ -26,7 +26,7 @@ class AuditoriaCredito(BaseModel):
     nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 como métrica analítica.")
     capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero.")
     estado_final: str = Field(description="Estrictamente uno de estos tres valores: APROBADO, OBSERVADO o RECHAZADO.")
-    observacion_subsanar: str = Field(description="Detalle específico de las observaciones para subsanar (ej. 'Regularizar foto del cliente borrosa al momento del desembolso' o 'Ninguna').")
+    observacion_subsanar: str = Field(description="Detalle específico de las observaciones o motivo de rechazo (ej. 'Registra calificación CPP en Sentinel - Rechazado por política de riesgo' o 'Ninguna').")
 
 # --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(datos_dict):
@@ -44,13 +44,11 @@ def guardar_en_sheets(datos_dict):
     except Exception as e:
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
-# --- CONTROLADOR PARA LIMPIAR ARCHIVOS Y FICHA SIN TOCAR OPCIONES ---
-if "upload_version" not in st.session_state:
-    st.session_state.upload_version = 0
-
+# --- FUNCIÓN PARA BORRAR ÚNICAMENTE EL CONTENIDO ---
 def limpiar_contenido():
-    st.session_state.upload_version += 1
-    st.rerun()
+    st.session_state["input_ficha"] = ""
+    st.session_state["file_sentinel"] = None
+    st.session_state["file_fotos"] = None
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
 st.write("Sube la ficha, tus fotos y el PDF de Sentinel para emitir el dictamen automático.")
@@ -65,9 +63,8 @@ if clave_ingresada != clave_correcta or not clave_correcta:
     st.warning("⚠️ Ingresa la clave de acceso autorizada para habilitar la auditoría.")
 else:
     client = genai.Client(api_key=api_key_oculta)
-    uv = st.session_state.upload_version
 
-    # 1. Selector de Modalidad Principal (Opciones intactas)
+    # 1. Selector de Modalidad Principal
     modalidad = st.selectbox("Tipo de Crédito:", ["Individual", "Grupal"], key="select_modalidad")
     
     # 2. Selector Dinámico de Productos según Modalidad
@@ -79,16 +76,15 @@ else:
     # 3. Selector de Condición del Cliente
     condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"], key="select_condicion")
     
-    # Subcategoría con las 3 opciones exactas para Renovado (Adelantada, Atrasada, En fecha)
+    # Subcategoría con las 3 opciones exactas para Renovado
     detalle_condicion = condicion_cliente
     if condicion_cliente == "Renovado":
         sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada", "En fecha"], key="select_sub_renovacion")
         detalle_condicion = f"Renovado ({sub_renovacion})"
 
-    # Contenido dinámico que SÍ se limpia al presionar Borrar Todo
-    ficha_texto = st.text_area("Ficha de Datos del Asesor:", height=150, key=f"input_ficha_{uv}")
-    sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"], key=f"file_sentinel_{uv}")
-    fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key=f"file_fotos_{uv}")
+    ficha_texto = st.text_area("Ficha de Datos del Asesor:", height=150, key="input_ficha")
+    sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"], key="file_sentinel")
+    fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="file_fotos")
     
     # Botones organizados
     col_btn1, col_btn2 = st.columns([3, 1])
@@ -101,7 +97,7 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Analizando expediente con parámetros optimizados de Credisolvencia..."):
+            with st.spinner("Analizando expediente con políticas de riesgo de Credisolvencia..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
@@ -119,26 +115,29 @@ else:
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
                     prompt_instrucciones = f"""
-                    Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita rigurosamente la solicitud evaluando cada documento y fotografía adjunta.
+                    Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita rigurosamente la solicitud evaluando cada documento y fotografía adjunta bajo los siguientes criterios inquebrantables:
 
                     Modalidad: {modalidad} | Producto Seleccionado: {producto} | Condición: {detalle_condicion}
                     Ficha del Asesor: {ficha_texto}
 
-                    PARÁMETROS Y CONCLUSIONES OBLIGATORIAS A INCLUIR EN EL DICTAMEN TÉCNICO (Markdown):
-                    1. **Documentación conforme**: Verificar que estén completos y conformes todos los documentos del expediente.
-                    2. **Buró Sentinel**: Indicar explícitamente si cuenta con calificación 100% normal, nivel de endeudamiento y **agregar referencias de otras entidades financieras o comerciales** (entidades, montos y comportamiento histórico de pagos).
-                    3. **Cotejo de Direcciones**: Validar y contrastar explícitamente si **la dirección del suministro de luz coincide con la dirección del DNI** y la ubicación del negocio/vivienda.
+                    PARÁMETROS Y POLÍTICAS ESTRICTAS DE EVALUACIÓN:
+                    1. **Buró Sentinel (REGLA DE CALIFICACIÓN Y EXCEPCIÓN)**: 
+                       - **NO SE ACEPTA** calificación en CPP (Con Problemas Potenciales), DEF ni DUD. Tampoco se aceptan deudas en categoría de Pérdida (PER) menores a 365 días.
+                       - **EXCEPCIÓN VÁLIDA:** Si el reporte muestra una deuda en categoría de **Pérdida (PER) mayor a 365 días, SÍ SE ACEPTA** y no es motivo de rechazo por sí sola.
+                       - Si el reporte presenta CPP, DEF, DUD o Pérdida <365 días, el crédito se **RECHAZA DIRECTAMENTE**. Si solo tiene Normal (NOR) o Pérdida >365 días, puede continuar con la evaluación.
+                    2. **Validación para Clientes Renovados (`{detalle_condicion}`)**: 
+                       - Al tratarse de una renovación, **se debe exigir e indicar que Riesgos revise rigurosamente el historial de pagos**, verificando que los pagos anteriores se hayan efectuado estrictamente **antes de las 12:00 del mediodía**.
+                    3. **Cotejo de Direcciones**: Validar y contrastar explícitamente si la dirección del suministro de luz coincide con la dirección del DNI y la ubicación del negocio/vivienda.
                     4. **Titularidad de Boletas/Recibos**: Verificar si los recibos de servicios están a nombre del titular o de un familiar directo (ej. cónyuge).
-                    5. **Ubicación y Pagos**: Validar conformidad de ubicación y pagos en fecha histórica.
-                    6. **Fotografía del Cliente**: Analizar la foto del rostro del cliente adjunta. Si presenta un detalle menor (ej. leve desenfoque) pero todo lo demás es óptimo, dictaminar APROBADO indicando en observaciones: `Regularizar foto del cliente al momento del desembolso`.
-                    7. **Conclusión Final**: Establecer claramente la conclusión de aprobación del crédito.
+                    5. **Fotografía del Cliente**: Analiza objetivamente la foto del rostro del cliente adjunta. **Si la foto es visible y clara, NO generes ninguna observación por foto borrosa**. Solo márcala si realmente está ausente o ilegible.
+                    6. **Conclusión y Estado Final**: Si el Sentinel tiene CPP u otra deuda irregular no permitida, el estado final es `RECHAZADO`. Solo se aprueba si cumple satisfactoriamente todos los filtros.
 
                     POLÍTICAS OFICIALES POR PRODUCTO:
-                    1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem. Requisito: Historial Sentinel normal/aceptable y negocio >1 año.
-                    2. WARMI: Grupos 6-8 mujeres (20-65). Tasa: 4% catorcenal / 8% mensual. Frec: Catorcenal. Garantía: Solidaridad grupal.
-                    3. YUNKA: Emprendedores (20-65). Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Semanal. Requisito: Buen Sentinel, negocio >6 meses, vivienda >1 año.
-                    4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
-                    5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
+                    1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem.
+                    2. WARMI: Grupos 6-8 mujeres (20-65). Tasa: 4% catorcenal / 8% mensual. Frec: Catorcenal.
+                    3. YUNKA: Emprendedores (20-65). Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Frec: Semanal.
+                    4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Plazo: 22-44 días.
+                    5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal.
 
                     REGLAS CRÍTICAS Y ORDEN ESTRICTO DE CAMPOS PARA GOOGLE SHEETS:
                     - **TIPO:** Debe registrar obligatoriamente la frecuencia exacta (Ej: Semanal, Diario, Mensual o Catorcenal). Jamás dejar vacío.
@@ -147,7 +146,7 @@ else:
                     - **CONDICIÓN:** Registrar exactamente '{detalle_condicion}'.
                     - **ESTADO Y OBSERVACIÓN:** 
                       * Estado final: `APROBADO`, `OBSERVADO` o `RECHAZADO`.
-                      * Si la foto del rostro del cliente es borrosa pero todo lo demás está conforme, el crédito se **APROBADO** y en observaciones se anota: `Regularizar foto del cliente al momento del desembolso`.
+                      * Si el Sentinel tiene CPP u otra deuda irregular prohibida, el estado es `RECHAZADO` y la observación indica el motivo exacto.
                     - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la fotografía del recibo de luz.
                     - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta las 5 últimas cuotas; semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
 
