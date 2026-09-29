@@ -76,7 +76,7 @@ else:
     # 3. Selector de Condición del Cliente
     condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"], key="select_condicion")
     
-    # Subcategoría que aparece al instante solo si es Renovado (con las 3 opciones solicitadas)
+    # Subcategoría con las 3 opciones exactas para Renovado
     detalle_condicion = condicion_cliente
     if condicion_cliente == "Renovado":
         sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada", "En fecha"], key="select_sub_renovacion")
@@ -86,7 +86,7 @@ else:
     sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"], key="file_sentinel")
     fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="file_fotos")
     
-    # Botones de acción organizados
+    # Botones organizados: Auditar y el botón exclusivo para Borrar Todo
     col_btn1, col_btn2 = st.columns([3, 1])
     with col_btn1:
         btn_evaluar = st.button("🚀 Auditar Expediente", key="btn_submit", use_container_width=True)
