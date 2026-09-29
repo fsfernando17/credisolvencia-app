@@ -44,15 +44,13 @@ def guardar_en_sheets(datos_dict):
     except Exception as e:
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
-# --- FUNCIÓN PARA LIMPIAR EL FORMULARIO POR COMPLETO ---
-def limpiar_formulario():
+# --- FUNCIÓN PARA BORRAR SOLO EL CONTENIDO (MANTENIENDO LAS OPCIONES) ---
+def limpiar_contenido():
     st.session_state["input_ficha"] = ""
-    st.session_state["file_sentinel"] = None
-    st.session_state["file_fotos"] = None
-    for key in ["select_modalidad", "select_prod_ind", "select_prod_grp", "select_condicion", "select_sub_renovacion"]:
-        if key in st.session_state:
-            del st.session_state[key]
-    st.rerun()
+    if "file_sentinel" in st.session_state:
+        del st.session_state["file_sentinel"]
+    if "file_fotos" in st.session_state:
+        del st.session_state["file_fotos"]
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
 st.write("Sube la ficha, tus fotos y el PDF de Sentinel para emitir el dictamen automático.")
@@ -80,7 +78,7 @@ else:
     # 3. Selector de Condición del Cliente
     condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"], key="select_condicion")
     
-    # Subcategoría con las 3 opciones exactas para Renovado (incluyendo "En fecha")
+    # Subcategoría con las 3 opciones exactas para Renovado (Adelantada, Atrasada, En fecha)
     detalle_condicion = condicion_cliente
     if condicion_cliente == "Renovado":
         sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada", "En fecha"], key="select_sub_renovacion")
@@ -95,7 +93,7 @@ else:
     with col_btn1:
         btn_evaluar = st.button("🚀 Auditar Expediente", key="btn_submit", use_container_width=True)
     with col_btn2:
-        btn_limpiar = st.button("🔄 Borrar Todo", key="btn_clear", use_container_width=True, on_click=limpiar_formulario)
+        btn_limpiar = st.button("🔄 Borrar Todo", key="btn_clear", use_container_width=True, on_click=limpiar_contenido)
 
     if btn_evaluar:
         if not sentinel_pdf or not fotos_requisitos:
