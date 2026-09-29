@@ -12,7 +12,7 @@ st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", l
 
 # --- ESQUEMA ESTRUCTURADO PERFECTAMENTE ALINEADO ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, reglas de descuento, monto de cuota, capacidad de pago, nivel de riesgo y observaciones para subsanar.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel, validación de luz, cotejo de direcciones (Suministro vs DNI), referencias de otras entidades, boletas a nombre del titular/familiar, foto del cliente, capacidad de pago, nivel de riesgo y conclusiones de aprobación.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
     codigo_suministro: str = Field(description="Número o código de suministro de luz extraído estrictamente de la fotografía del recibo de luz adjunta.")
     nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
@@ -86,7 +86,7 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Analizando expediente con modelos de cuota disponible..."):
+            with st.spinner("Analizando expediente con parámetros optimizados de Credisolvencia..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
@@ -104,9 +104,19 @@ else:
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                     
                     prompt_instrucciones = f"""
-                    Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita rigurosamente la solicitud:
+                    Actúa como Analista Senior de Riesgos y Cumplimiento para Credisolvencia. Audita rigurosamente la solicitud evaluando cada documento y fotografía adjunta.
+
                     Modalidad: {modalidad} | Producto Seleccionado: {producto} | Condición: {detalle_condicion}
                     Ficha del Asesor: {ficha_texto}
+
+                    PARÁMETROS Y CONCLUSIONES OBLIGATORIAS A INCLUIR EN EL DICTAMEN TÉCNICO (Markdown):
+                    1. **Documentación conforme**: Verificar que estén completos y conformes todos los documentos del expediente.
+                    2. **Buró Sentinel**: Indicar explícitamente si cuenta con calificación 100% normal, nivel de endeudamiento y **agregar referencias de otras entidades financieras o comerciales** (entidades, montos y comportamiento histórico de pagos).
+                    3. **Cotejo de Direcciones**: Validar y contrastar explícitamente si **la dirección del suministro de luz coincide con la dirección del DNI** y la ubicación del negocio/vivienda.
+                    4. **Titularidad de Boletas/Recibos**: Verificar si los recibos de servicios están a nombre del titular o de un familiar directo (ej. cónyuge).
+                    5. **Ubicación y Pagos**: Validar conformidad de ubicación y pagos en fecha histórica.
+                    6. **Fotografía del Cliente**: Analizar la foto del rostro del cliente adjunta. Si presenta un detalle menor (ej. leve desenfoque) pero todo lo demás es óptimo, dictaminar APROBADO indicando en observaciones: `Regularizar foto del cliente al momento del desembolso`.
+                    7. **Conclusión Final**: Establecer claramente la conclusión de aprobación del crédito.
 
                     POLÍTICAS OFICIALES POR PRODUCTO:
                     1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem. Requisito: Historial Sentinel normal/aceptable y negocio >1 año.
@@ -115,14 +125,14 @@ else:
                     4. YAPAY: Negocios >6 meses. Tasa: 0.9% diaria / 4.5% semanal / 18% mensual. Plazo: 22-44 días. Requisito: Permite buena o mala calificación Sentinel.
                     5. LLAMA: Grupos 4 mujeres (20-65). Tasa: 3% semanal / 12% mensual. Frec: Semanal. Garantía: 5% depósito + solidaridad grupal.
 
-                    REGLAS CRÍTICAS Y ORDEN ESTRICTO DE CAMPOS:
+                    REGLAS CRÍTICAS Y ORDEN ESTRICTO DE CAMPOS PARA GOOGLE SHEETS:
                     - **TIPO:** Debe registrar obligatoriamente la frecuencia exacta (Ej: Semanal, Diario, Mensual o Catorcenal). Jamás dejar vacío.
                     - **INTERÉS:** La columna de interés monetario se omite por completo (se envía vacía). El porcentaje va exclusivamente en el campo `%`.
                     - **¿AUMENTO?:** Registrar estrictamente 'Sí' o 'No'.
                     - **CONDICIÓN:** Registrar exactamente '{detalle_condicion}'.
                     - **ESTADO Y OBSERVACIÓN:** 
                       * Estado final: `APROBADO`, `OBSERVADO` o `RECHAZADO`.
-                      * Si la foto del rostro del cliente es borrosa pero todo lo demás está conforme, el crédito se **APROBADO** y en observaciones se anota: `Regularizar foto del cliente al momento del desembolso`. Si hay más falencias graves, pasa a **OBSERVADO**.
+                      * Si la foto del rostro del cliente es borrosa pero todo lo demás está conforme, el crédito se **APROBADO** y en observaciones se anota: `Regularizar foto del cliente al momento del desembolso`.
                     - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la fotografía del recibo de luz.
                     - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta las 5 últimas cuotas; semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
 
@@ -130,7 +140,7 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # USO EXCLUSIVO DE MODELOS CON CUOTA LIBRE (Evitando Gemini 3.8 Flash que está al 5/5)
+                    # Modelos con cuota libre y disponible
                     modelos_libres = ["gemini-2.5-flash", "gemini-3.5-flash-lite"]
                     response = None
                     ultimo_error = ""
