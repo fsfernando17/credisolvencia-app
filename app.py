@@ -40,15 +40,17 @@ def guardar_en_sheets(datos_dict):
         if respuesta.status_code == 200:
             st.success("✅ Expediente registrado limpiamente en Google Sheets.")
         else:
-            st.warning(f"⚠️ El servidor de Google respondió con código: {respuesta.status_code}")
+            st.warning(f"⚠️️ El servidor de Google respondió con código: {respuesta.status_code}")
     except Exception as e:
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
-# --- FUNCIÓN PARA BORRAR ÚNICAMENTE EL CONTENIDO ---
+# --- CONTROLADOR SEGURO PARA LIMPIAR ARCHIVOS Y TEXTO SIN TOCAR OPCIONES ---
+if "upload_version" not in st.session_state:
+    st.session_state.upload_version = 0
+
 def limpiar_contenido():
-    st.session_state["input_ficha"] = ""
-    st.session_state["file_sentinel"] = None
-    st.session_state["file_fotos"] = None
+    st.session_state.upload_version += 1
+    st.rerun()
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
 st.write("Sube la ficha, tus fotos y el PDF de Sentinel para emitir el dictamen automático.")
@@ -63,8 +65,9 @@ if clave_ingresada != clave_correcta or not clave_correcta:
     st.warning("⚠️ Ingresa la clave de acceso autorizada para habilitar la auditoría.")
 else:
     client = genai.Client(api_key=api_key_oculta)
+    uv = st.session_state.upload_version
 
-    # 1. Selector de Modalidad Principal
+    # 1. Selector de Modalidad Principal (Opciones intactas)
     modalidad = st.selectbox("Tipo de Crédito:", ["Individual", "Grupal"], key="select_modalidad")
     
     # 2. Selector Dinámico de Productos según Modalidad
@@ -76,15 +79,16 @@ else:
     # 3. Selector de Condición del Cliente
     condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"], key="select_condicion")
     
-    # Subcategoría con las 3 opciones exactas para Renovado
+    # Subcategoría con las 3 opciones exactas para Renovado (Adelantada, Atrasada, En fecha)
     detalle_condicion = condicion_cliente
     if condicion_cliente == "Renovado":
         sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada", "En fecha"], key="select_sub_renovacion")
         detalle_condicion = f"Renovado ({sub_renovacion})"
 
-    ficha_texto = st.text_area("Ficha de Datos del Asesor:", height=150, key="input_ficha")
-    sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"], key="file_sentinel")
-    fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="file_fotos")
+    # Contenidos dinámicos enlazados al contador para permitir el borrado limpio sin errores
+    ficha_texto = st.text_area("Ficha de Datos del Asesor:", height=150, key=f"input_ficha_{uv}")
+    sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"], key=f"file_sentinel_{uv}")
+    fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key=f"file_fotos_{uv}")
     
     # Botones organizados
     col_btn1, col_btn2 = st.columns([3, 1])
