@@ -13,9 +13,9 @@ st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", l
 
 # --- ESQUEMA ESTRUCTURADO PERFECTAMENTE ALINEADO ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel (aplicando regla de rechazo para CPP/DEF/DUD y Pérdida <365 días, aceptando Pérdida >365 días), validación de luz, cotejo de direcciones, pagos históricos antes de las 12 m. para renovaciones, titularidad, foto del cliente, capacidad de pago y conclusión.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel (rechazo por CPP/DEF/DUD y Pérdida <365 días, aceptación de Pérdida >365 días), validación estricta de foto de suministro de luz obligatoria, cotejo de direcciones, pagos históricos antes de las 12 m. para renovaciones, titularidad, foto del cliente y conclusión.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
-    codigo_suministro: str = Field(description="Número o código de suministro de luz extraído estrictamente de la fotografía del recibo de luz adjunta.")
+    codigo_suministro: str = Field(description="Número o código de suministro de luz extraído estrictamente de la fotografía del recibo de luz adjunta (si no hay foto, indicar 'No adjuntado').")
     nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
     apellidos: str = Field(description="Apellidos completos del cliente (sin nombres).")
     monto: str = Field(description="Monto total del crédito solicitado con su símbolo o número.")
@@ -27,7 +27,7 @@ class AuditoriaCredito(BaseModel):
     nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 como métrica analítica.")
     capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero.")
     estado_final: str = Field(description="Estrictamente uno de estos tres valores: APROBADO, OBSERVADO o RECHAZADO.")
-    observacion_subsanar: str = Field(description="Detalle específico de las observaciones o motivo de rechazo (ej. 'Registra calificación CPP en Sentinel - Rechazado por política de riesgo' o 'Ninguna').")
+    observacion_subsanar: str = Field(description="Detalle específico de las observaciones o motivo (ej. 'Falta adjuntar la fotografía del recibo/suministro de luz' o 'Ninguna').")
 
 # --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(datos_dict):
@@ -102,7 +102,7 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Analizando expediente con sistema anti-saturación y respaldo inteligente..."):
+            with st.spinner("Analizando expediente con políticas estrictas de cumplimiento de Credisolvencia..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
@@ -126,16 +126,22 @@ else:
                     Ficha del Asesor: {ficha_texto}
 
                     PARÁMETROS Y POLÍTICAS ESTRICTAS DE EVALUACIÓN:
-                    1. **Buró Sentinel (REGLA DE CALIFICACIÓN Y EXCEPCIÓN)**: 
+                    1. **Verificación Obligatoria de Foto de Suministro de Luz**: 
+                       - Revisa detalladamente todas las imágenes adjuntas. **DEBE estar presente la fotografía o comprobante del suministro de luz**.
+                       - **REGLA INQUEBRANTABLE:** Si entre las imágenes **NO se encuentra la fotografía del suministro de luz**, el crédito **NO PUEDE SER APROBADO**. El estado final debe ser obligatoriamente **OBSERVADO** y en la observación se debe indicar de forma clara: `Falta adjuntar la fotografía del recibo/suministro de luz`.
+                    2. **Buró Sentinel (REGLA DE CALIFICACIÓN Y EXCEPCIÓN)**: 
                        - **NO SE ACEPTA** calificación en CPP (Con Problemas Potenciales), DEF ni DUD. Tampoco se aceptan deudas en categoría de Pérdida (PER) menores a 365 días.
                        - **EXCEPCIÓN VÁLIDA:** Si el reporte muestra una deuda en categoría de **Pérdida (PER) mayor a 365 días, SÍ SE ACEPTA** y no es motivo de rechazo por sí sola.
                        - Si el reporte presenta CPP, DEF, DUD o Pérdida <365 días, el crédito se **RECHAZA DIRECTAMENTE**. Si solo tiene Normal (NOR) o Pérdida >365 días, puede continuar con la evaluación.
-                    2. **Validación para Clientes Renovados (`{detalle_condicion}`)**: 
+                    3. **Validación para Clientes Renovados (`{detalle_condicion}`)**: 
                        - Al tratarse de una renovación, **se debe exigir e indicar que Riesgos revise rigurosamente el historial de pagos**, verificando que los pagos anteriores se hayan efectuado estrictamente **antes de las 12:00 del mediodía**.
-                    3. **Cotejo de Direcciones**: Validar y contrastar explícitamente si la dirección del suministro de luz coincide con la dirección del DNI y la ubicación del negocio/vivienda.
-                    4. **Titularidad de Boletas/Recibos**: Verificar si los recibos de servicios están a nombre del titular o de un familiar directo (ej. cónyuge).
-                    5. **Fotografía del Cliente**: Analiza objetivamente la foto del rostro del cliente adjunta. **Si la foto es visible y clara, NO generes ninguna observación por foto borrosa**. Solo márcala si realmente está ausente o ilegible.
-                    6. **Conclusión y Estado Final**: Si el Sentinel tiene CPP u otra deuda irregular no permitida, el estado final es `RECHAZADO`. Solo se aprueba si cumple satisfactoriamente todos los filtros.
+                    4. **Cotejo de Direcciones**: Validar y contrastar explícitamente si la dirección del suministro de luz coincide con la dirección del DNI y la ubicación del negocio/vivienda (solo si se adjuntó el recibo).
+                    5. **Titularidad de Boletas/Recibos**: Verificar si los recibos de servicios están a nombre del titular o de un familiar directo (ej. cónyuge).
+                    6. **Fotografía del Cliente**: Analiza objetivamente la foto del rostro del cliente adjunta. **Si la foto es visible y clara, NO generes ninguna observación por foto borrosa**. Solo márcala si realmente está ausente o ilegible.
+                    7. **Conclusión y Estado Final**: 
+                       - Si falta la foto del suministro: `OBSERVADO`.
+                       - Si el Sentinel tiene CPP u otra deuda prohibida: `RECHAZADO`.
+                       - Si todo está conforme y la foto de luz está presente: `APROBADO`.
 
                     POLÍTICAS OFICIALES POR PRODUCTO:
                     1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem.
@@ -151,8 +157,8 @@ else:
                     - **CONDICIÓN:** Registrar exactamente '{detalle_condicion}'.
                     - **ESTADO Y OBSERVACIÓN:** 
                       * Estado final: `APROBADO`, `OBSERVADO` o `RECHAZADO`.
-                      * Si el Sentinel tiene CPP u otra deuda irregular prohibida, el estado es `RECHAZADO` y la observación indica el motivo exacto.
-                    - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la fotografía del recibo de luz.
+                      * Si falta la foto del suministro, estado `OBSERVADO` y observación: `Falta adjuntar la fotografía del recibo/suministro de luz`.
+                    - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la fotografía del recibo de luz (si no hay foto, indicar 'No adjuntado').
                     - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta las 5 últimas cuotas; semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
 
                     Rellena todos los campos del esquema estructurado manteniendo el orden perfecto de las columnas.
@@ -166,7 +172,7 @@ else:
                     exito_general = False
 
                     for modelo in modelos_a_probar:
-                        for intento in range(3): # 3 intentos por cada modelo
+                        for intento in range(3):
                             try:
                                 response = client.models.generate_content(
                                     model=modelo,
