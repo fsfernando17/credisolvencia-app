@@ -44,13 +44,13 @@ def guardar_en_sheets(datos_dict):
     except Exception as e:
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
-# --- FUNCIÓN PARA BORRAR SOLO EL CONTENIDO (MANTENIENDO LAS OPCIONES) ---
+# --- CONTROLADOR PARA LIMPIAR ARCHIVOS Y FICHA SIN TOCAR OPCIONES ---
+if "upload_version" not in st.session_state:
+    st.session_state.upload_version = 0
+
 def limpiar_contenido():
-    st.session_state["input_ficha"] = ""
-    if "file_sentinel" in st.session_state:
-        del st.session_state["file_sentinel"]
-    if "file_fotos" in st.session_state:
-        del st.session_state["file_fotos"]
+    st.session_state.upload_version += 1
+    st.rerun()
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
 st.write("Sube la ficha, tus fotos y el PDF de Sentinel para emitir el dictamen automático.")
@@ -65,8 +65,9 @@ if clave_ingresada != clave_correcta or not clave_correcta:
     st.warning("⚠️ Ingresa la clave de acceso autorizada para habilitar la auditoría.")
 else:
     client = genai.Client(api_key=api_key_oculta)
+    uv = st.session_state.upload_version
 
-    # 1. Selector de Modalidad Principal
+    # 1. Selector de Modalidad Principal (Opciones intactas)
     modalidad = st.selectbox("Tipo de Crédito:", ["Individual", "Grupal"], key="select_modalidad")
     
     # 2. Selector Dinámico de Productos según Modalidad
@@ -84,9 +85,10 @@ else:
         sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada", "En fecha"], key="select_sub_renovacion")
         detalle_condicion = f"Renovado ({sub_renovacion})"
 
-    ficha_texto = st.text_area("Ficha de Datos del Asesor:", height=150, key="input_ficha")
-    sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"], key="file_sentinel")
-    fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="file_fotos")
+    # Contenido dinámico que SÍ se limpia al presionar Borrar Todo
+    ficha_texto = st.text_area("Ficha de Datos del Asesor:", height=150, key=f"input_ficha_{uv}")
+    sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"], key=f"file_sentinel_{uv}")
+    fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key=f"file_fotos_{uv}")
     
     # Botones organizados
     col_btn1, col_btn2 = st.columns([3, 1])
