@@ -44,10 +44,14 @@ def guardar_en_sheets(datos_dict):
     except Exception as e:
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
-# --- FUNCIÓN PARA LIMPIAR EL FORMULARIO ---
+# --- FUNCIÓN PARA LIMPIAR EL FORMULARIO POR COMPLETO ---
 def limpiar_formulario():
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
+    st.session_state["input_ficha"] = ""
+    st.session_state["file_sentinel"] = None
+    st.session_state["file_fotos"] = None
+    for key in ["select_modalidad", "select_prod_ind", "select_prod_grp", "select_condicion", "select_sub_renovacion"]:
+        if key in st.session_state:
+            del st.session_state[key]
     st.rerun()
 
 st.title("📋 Evaluador de Crédito - Credisolvencia")
@@ -76,7 +80,7 @@ else:
     # 3. Selector de Condición del Cliente
     condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"], key="select_condicion")
     
-    # Subcategoría con las 3 opciones exactas para Renovado
+    # Subcategoría con las 3 opciones exactas para Renovado (incluyendo "En fecha")
     detalle_condicion = condicion_cliente
     if condicion_cliente == "Renovado":
         sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada", "En fecha"], key="select_sub_renovacion")
@@ -86,7 +90,7 @@ else:
     sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"], key="file_sentinel")
     fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="file_fotos")
     
-    # Botones organizados: Auditar y el botón exclusivo para Borrar Todo
+    # Botones organizados
     col_btn1, col_btn2 = st.columns([3, 1])
     with col_btn1:
         btn_evaluar = st.button("🚀 Auditar Expediente", key="btn_submit", use_container_width=True)
