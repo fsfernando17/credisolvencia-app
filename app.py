@@ -44,6 +44,12 @@ def guardar_en_sheets(datos_dict):
     except Exception as e:
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
+# --- FUNCIÓN PARA LIMPIAR EL FORMULARIO ---
+def limpiar_formulario():
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
+
 st.title("📋 Evaluador de Crédito - Credisolvencia")
 st.write("Sube la ficha, tus fotos y el PDF de Sentinel para emitir el dictamen automático.")
 
@@ -58,7 +64,7 @@ if clave_ingresada != clave_correcta or not clave_correcta:
 else:
     client = genai.Client(api_key=api_key_oculta)
 
-    # 1. Selector de Modalidad Principal (Dinámico sin form)
+    # 1. Selector de Modalidad Principal
     modalidad = st.selectbox("Tipo de Crédito:", ["Individual", "Grupal"], key="select_modalidad")
     
     # 2. Selector Dinámico de Productos según Modalidad
@@ -70,17 +76,22 @@ else:
     # 3. Selector de Condición del Cliente
     condicion_cliente = st.selectbox("Condición del Cliente:", ["Nuevo", "Renovado", "Recuperado", "Promotor"], key="select_condicion")
     
-    # Subcategoría que aparece al instante solo si es Renovado
+    # Subcategoría que aparece al instante solo si es Renovado (con las 3 opciones solicitadas)
     detalle_condicion = condicion_cliente
     if condicion_cliente == "Renovado":
-        sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada"], key="select_sub_renovacion")
+        sub_renovacion = st.selectbox("Tipo de Renovación:", ["Adelantada", "Atrasada", "En fecha"], key="select_sub_renovacion")
         detalle_condicion = f"Renovado ({sub_renovacion})"
 
     ficha_texto = st.text_area("Ficha de Datos del Asesor:", height=150, key="input_ficha")
     sentinel_pdf = st.file_uploader("Cargar Sentinel (PDF)", type=["pdf"], key="file_sentinel")
     fotos_requisitos = st.file_uploader("Cargar Fotos (DNI, Luz, Vivienda, Negocio)", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="file_fotos")
     
-    btn_evaluar = st.button("🚀 Auditar Expediente", key="btn_submit")
+    # Botones de acción organizados
+    col_btn1, col_btn2 = st.columns([3, 1])
+    with col_btn1:
+        btn_evaluar = st.button("🚀 Auditar Expediente", key="btn_submit", use_container_width=True)
+    with col_btn2:
+        btn_limpiar = st.button("🔄 Borrar Todo", key="btn_clear", use_container_width=True, on_click=limpiar_formulario)
 
     if btn_evaluar:
         if not sentinel_pdf or not fotos_requisitos:
