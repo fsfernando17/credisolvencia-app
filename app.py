@@ -2,6 +2,7 @@ import streamlit as st
 from google import genai
 from google.genai import types
 import time
+import random
 from datetime import datetime, timezone, timedelta
 import requests
 from pydantic import BaseModel, Field
@@ -40,7 +41,7 @@ def guardar_en_sheets(datos_dict):
         if respuesta.status_code == 200:
             st.success("✅ Expediente registrado limpiamente en Google Sheets.")
         else:
-            st.warning(f"⚠️️ El servidor de Google respondió con código: {respuesta.status_code}")
+            st.warning(f"⚠️ El servidor de Google respondió con código: {respuesta.status_code}")
     except Exception as e:
         st.warning(f"No se pudo guardar en el registro online: {str(e)}")
 
@@ -101,7 +102,7 @@ else:
         if not sentinel_pdf or not fotos_requisitos:
             st.error("⚠️ Es obligatorio adjuntar el PDF de Sentinel y las fotografías.")
         else:
-            with st.spinner("Analizando expediente con políticas de riesgo de Credisolvencia..."):
+            with st.spinner("Analizando expediente con sistema anti-saturación y respaldo inteligente..."):
                 try:
                     contents = []
                     pdf_bytes = sentinel_pdf.read()
@@ -158,30 +159,38 @@ else:
                     """
                     contents.append(prompt_instrucciones)
 
-                    # Modelos con cuota libre y disponible
-                    modelos_libres = ["gemini-2.5-flash", "gemini-3.5-flash-lite"]
+                    # CADENA MULTIMODELO ROBUSTA CON REINTENTOS EXPONENCIALES Y JITTER
+                    modelos_a_probar = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash"]
                     response = None
                     ultimo_error = ""
-                    exito = False
+                    exito_general = False
 
-                    for modelo in modelos_libres:
-                        try:
-                            response = client.models.generate_content(
-                                model=modelo,
-                                contents=contents,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    response_schema=AuditoriaCredito,
-                                ),
-                            )
-                            if response and response.parsed:
-                                exito = True
-                                break
-                        except Exception as err:
-                            ultimo_error = str(err)
-                            continue
+                    for modelo in modelos_a_probar:
+                        for intento in range(3): # 3 intentos por cada modelo
+                            try:
+                                response = client.models.generate_content(
+                                    model=modelo,
+                                    contents=contents,
+                                    config=types.GenerateContentConfig(
+                                        response_mime_type="application/json",
+                                        response_schema=AuditoriaCredito,
+                                    ),
+                                )
+                                if response and response.parsed:
+                                    exito_general = True
+                                    break
+                            except Exception as err:
+                                ultimo_error = str(err)
+                                if "503" in ultimo_error or "UNAVAILABLE" in ultimo_error or "429" in ultimo_error:
+                                    delay = (2 ** intento) + random.uniform(0.5, 1.5)
+                                    time.sleep(delay)
+                                    continue
+                                else:
+                                    break
+                        if exito_general:
+                            break
 
-                    if exito and response and response.parsed:
+                    if exito_general and response and response.parsed:
                         resultado = response.parsed
                         
                         st.success("Auditoría completada:")
@@ -214,7 +223,7 @@ else:
 
                         guardar_en_sheets(payload_sheet)
                     else:
-                        st.error(f"⚠️ Error al procesar: {ultimo_error}")
+                        st.error(f"⚠️ Los servidores de Google experimentan alta demanda temporal (503). Por favor, espera 5 segundos y vuelve a hacer clic en 'Auditar Expediente'. Detalle: {ultimo_error}")
 
                 except Exception as e:
                     st.error(f"Error crítico al procesar la solicitud: {str(e)}")
