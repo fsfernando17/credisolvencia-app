@@ -13,7 +13,7 @@ st.set_page_config(page_title="Credisolvencia - Auditoría", page_icon="📊", l
 
 # --- ESQUEMA ESTRUCTURADO PERFECTAMENTE ALINEADO ---
 class AuditoriaCredito(BaseModel):
-    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel (rechazo por CPP/DEF/DUD y Pérdida <365 días, aceptación de Pérdida >365 días), validación estricta de foto de suministro de luz obligatoria, cotejo de direcciones, pagos históricos antes de las 12 m. para renovaciones, titularidad, foto del cliente y conclusión.")
+    dictamen_markdown: str = Field(description="Dictamen técnico detallado en formato Markdown mostrando la evaluación objetiva de edad, buró Sentinel (rechazo estricto por CPP/DEF/DUD y Pérdida <365 días, aceptación de Pérdida >365 días), validación obligatoria de foto de suministro de luz, cotejo estricto de direcciones y lotes (DNI vs Recibo), exigencia de revisión de pagos anteriores por Riesgos (sin darlos por sentados), titularidad, foto del cliente y conclusión.")
     dni: str = Field(description="Número de DNI extraído correctamente de los documentos (8 dígitos exactos).")
     codigo_suministro: str = Field(description="Número o código de suministro de luz extraído estrictamente de la fotografía del recibo de luz adjunta (si no hay foto, indicar 'No adjuntado').")
     nombres: str = Field(description="Nombres completos del cliente (sin apellidos).")
@@ -27,7 +27,7 @@ class AuditoriaCredito(BaseModel):
     nivel_riesgo: int = Field(description="Puntuación de riesgo numérica exacta del 1 al 10 como métrica analítica.")
     capacidad_pago: str = Field(description="Capacidad de pago estimada mensual promedio en dinero.")
     estado_final: str = Field(description="Estrictamente uno de estos tres valores: APROBADO, OBSERVADO o RECHAZADO.")
-    observacion_subsanar: str = Field(description="Detalle específico de las observaciones o motivo (ej. 'Falta adjuntar la fotografía del recibo/suministro de luz' o 'Ninguna').")
+    observacion_subsanar: str = Field(description="Detalle específico de las observaciones o motivo (ej. 'Discrepancia de dirección: El DNI indica Lote 62 y el recibo de luz indica Lote 77' o 'Ninguna').")
 
 # --- FUNCIÓN PARA GUARDAR EN GOOGLE SHEETS ---
 def guardar_en_sheets(datos_dict):
@@ -127,21 +127,24 @@ else:
 
                     PARÁMETROS Y POLÍTICAS ESTRICTAS DE EVALUACIÓN:
                     1. **Verificación Obligatoria de Foto de Suministro de Luz**: 
-                       - Revisa detalladamente todas las imágenes adjuntas. **DEBE estar presente la fotografía o comprobante del suministro de luz**.
-                       - **REGLA INQUEBRANTABLE:** Si entre las imágenes **NO se encuentra la fotografía del suministro de luz**, el crédito **NO PUEDE SER APROBADO**. El estado final debe ser obligatoriamente **OBSERVADO** y en la observación se debe indicar de forma clara: `Falta adjuntar la fotografía del recibo/suministro de luz`.
-                    2. **Buró Sentinel (REGLA DE CALIFICACIÓN Y EXCEPCIÓN)**: 
+                       - Revisa detalladamente todas las imágenes adjuntas. **DEBE estar presente la fotografía o comprobante impreso del suministro de luz (recibo de luz)**.
+                       - Si entre las imágenes **NO se encuentra la fotografía del recibo/suministro de luz**, el crédito **NO PUEDE SER APROBADO**. El estado final debe ser obligatoriamente **OBSERVADO** y en la observación se debe indicar: `Falta adjuntar la fotografía del recibo/suministro de luz`.
+                    2. **Cotejo Estricto de Direcciones y Lotes (DNI vs Recibo de Luz)**: 
+                       - Compara minuciosamente carácter por carácter y número por número la dirección del DNI con la dirección del recibo de suministro de luz.
+                       - **REGLA DE DISCREPANCIA:** Si el número de Lote (Lt), Manzana (Mz) o la numeración difiere entre ambos documentos (por ejemplo, Lote 77 en el recibo de luz frente a Lote 62 en el DNI), **constituye una discrepancia crítica**.
+                       - Ante cualquier diferencia de lote o dirección, el crédito **NO SE APRUEBA**: el estado final debe ser obligatoriamente **OBSERVADO** detallando explícitamente la inconsistencia (ej. `Discrepancia de dirección: El DNI indica Lote 62 y el recibo de luz indica Lote 77`).
+                    3. **Buró Sentinel (REGLA DE CALIFICACIÓN Y EXCEPCIÓN)**: 
                        - **NO SE ACEPTA** calificación en CPP (Con Problemas Potenciales), DEF ni DUD. Tampoco se aceptan deudas en categoría de Pérdida (PER) menores a 365 días.
                        - **EXCEPCIÓN VÁLIDA:** Si el reporte muestra una deuda en categoría de **Pérdida (PER) mayor a 365 días, SÍ SE ACEPTA** y no es motivo de rechazo por sí sola.
                        - Si el reporte presenta CPP, DEF, DUD o Pérdida <365 días, el crédito se **RECHAZA DIRECTAMENTE**. Si solo tiene Normal (NOR) o Pérdida >365 días, puede continuar con la evaluación.
-                    3. **Validación para Clientes Renovados (`{detalle_condicion}`)**: 
-                       - Al tratarse de una renovación, **se debe exigir e indicar que Riesgos revise rigurosamente el historial de pagos**, verificando que los pagos anteriores se hayan efectuado estrictamente **antes de las 12:00 del mediodía**.
-                    4. **Cotejo de Direcciones**: Validar y contrastar explícitamente si la dirección del suministro de luz coincide con la dirección del DNI y la ubicación del negocio/vivienda (solo si se adjuntó el recibo).
+                    4. **Validación de Pagos e Historial (Sin Asumir Supuestos)**: 
+                       - **NUNCA des por sentado el comportamiento de pago anterior.** El dictamen debe indicar expresamente que **el área de Riesgos debe analizar y verificar rigurosamente el historial de créditos anteriores y los pagos históricos**, comprobando específicamente que se hayan efectuado antes de las 12:00 del mediodía.
                     5. **Titularidad de Boletas/Recibos**: Verificar si los recibos de servicios están a nombre del titular o de un familiar directo (ej. cónyuge).
                     6. **Fotografía del Cliente**: Analiza objetivamente la foto del rostro del cliente adjunta. **Si la foto es visible y clara, NO generes ninguna observación por foto borrosa**. Solo márcala si realmente está ausente o ilegible.
                     7. **Conclusión y Estado Final**: 
-                       - Si falta la foto del suministro: `OBSERVADO`.
-                       - Si el Sentinel tiene CPP u otra deuda prohibida: `RECHAZADO`.
-                       - Si todo está conforme y la foto de luz está presente: `APROBADO`.
+                       - Si falta la foto del suministro o hay discrepancia de lotes/dirección: Estado final `OBSERVADO`.
+                       - Si el Sentinel tiene CPP u otra deuda prohibida: Estado final `RECHAZADO`.
+                       - Si todo está conforme (lotes coinciden, recibo presente, Sentinel apto): Estado final `APROBADO`.
 
                     POLÍTICAS OFICIALES POR PRODUCTO:
                     1. INTI: Microempresas >1 año. Tasa: 0.6% diaria / 3% semanal / 12% mensual. Frec: Semanal. Plazo: 4-8 sem.
@@ -157,7 +160,7 @@ else:
                     - **CONDICIÓN:** Registrar exactamente '{detalle_condicion}'.
                     - **ESTADO Y OBSERVACIÓN:** 
                       * Estado final: `APROBADO`, `OBSERVADO` o `RECHAZADO`.
-                      * Si falta la foto del suministro, estado `OBSERVADO` y observación: `Falta adjuntar la fotografía del recibo/suministro de luz`.
+                      * Si hay discrepancia de lotes (ej. DNI Lt. 62 vs Recibo Lote 77), estado `OBSERVADO` indicando la discrepancia exacta.
                     - **CÓDIGO DE SUMINISTRO:** Extraer obligatoriamente de la fotografía del recibo de luz (si no hay foto, indicar 'No adjuntado').
                     - **POLÍTICA DE DESCUENTO Y CAPACIDAD DE PAGO:** Crédito diario hasta las 5 últimas cuotas; semanal a partir de 1 mes (>= 4 semanas) permite la última cuota. La capacidad de pago no es condicionante.
 
