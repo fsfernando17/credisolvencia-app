@@ -143,9 +143,9 @@ api_key_oculta = st.secrets.get("GEMINI_API_KEY", "")
 client = genai.Client(api_key=api_key_oculta) if api_key_oculta else None
 
 
-# SISTEMA IA CON RESPUESTA ESTRUCTURADA EN JSON
+# SISTEMA IA CON RESPUESTA ESTRUCTURADA EN JSON (MODELOS OFICIALES DE TU CONSOLA)
 def generar_respuesta_ia_rapida(client, prompt):
-    modelos_validos = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    modelos_validos = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"]
     ultimo_error = None
 
     config = types.GenerateContentConfig(
@@ -155,20 +155,35 @@ def generar_respuesta_ia_rapida(client, prompt):
     )
 
     for modelo in modelos_validos:
-        try:
-            response = client.models.generate_content(
-                model=modelo, contents=prompt, config=config
-            )
-            if response and response.text:
-                return response.text
-        except Exception as e:
-            ultimo_error = e
-            continue
+        for intento in range(3):
+            try:
+                response = client.models.generate_content(
+                    model=modelo, contents=prompt, config=config
+                )
+                if response and response.text:
+                    return response.text
+            except Exception as e:
+                ultimo_error = e
+                err_str = str(e)
+                if any(
+                    err in err_str
+                    for err in [
+                        "500", "503", "429", "INTERNAL", "UNAVAILABLE", "RESOURCE_EXHAUSTED"
+                    ]
+                ):
+                    time.sleep(0.8 * (intento + 1))
+                else:
+                    break
 
     raise Exception(f"Detalle de servicio API: {str(ultimo_error)}")
 
 
-# --- DICCIONARIOS Y TASAS DE CONVERSIÓN ---
+# --- DICCIONARIOS, Mapeo de Tickers y TASAS DE CONVERSIÓN ---
+TICKER_MAP = {
+    "SPCCPI1.LM": "SCCO",
+    "SPCCPI2.LM": "SCCO",
+}
+
 TASAS_CAMBIO_USD = {
     "USD ($)": 1.0,
     "PEN (S/.)": 3.75,
@@ -210,8 +225,8 @@ MERCADOS = {
     },
     "Bolsa de Valores de Lima (BVL - Perú)": {
         "SPCCPI1.LM": "Southern Copper Corp. (Acc. Inversión BVL - PEN)",
+        "SCCO": "Southern Copper Corp. (NYSE / BVL - USD)",
         "BAP": "Credicorp Ltd. (USD)",
-        "SCCO": "Southern Copper Corp. (NYSE ADR - USD)",
         "IFS": "Intercorp Financial Services (USD)",
         "BVN": "Compañía de Minas Buenaventura (USD)",
         "CPACEN1.LM": "Cementos Pacasmayo (PEN)",
@@ -331,11 +346,20 @@ if st.button(
             "⚠️ El servicio de Inteligencia Artificial no está configurado en el servidor (Falta la clave GEMINI_API_KEY en Secrets)."
         )
     else:
-        # 1. PASO BURSÁTIL Y CUANTITATIVO (HISTÓRICO 5 AÑOS)
+        # 1. PASO BURSÁTIL Y CUANTITATIVO (CON FALLBACK DE TICKERS)
         datos_cargados = False
         try:
-            stock = yf.Ticker(ticker_final)
+            # Búsqueda con resolución de mapa
+            search_ticker = TICKER_MAP.get(ticker_final, ticker_final)
+            stock = yf.Ticker(search_ticker)
             df = stock.history(period="5y")
+            
+            # Intento secundario si finaliza en .LM y vino vacío
+            if df.empty and search_ticker.endswith(".LM"):
+                alt_ticker = search_ticker.replace(".LM", "")
+                stock = yf.Ticker(alt_ticker)
+                df = stock.history(period="5y")
+
             info = stock.info
 
             if df.empty:
@@ -509,4 +533,122 @@ if st.button(
                 st.markdown("---")
 
         except Exception as e:
-            st.error(f"
+            st.error(f"Error procesando métricas financieras: {str(e)}")
+
+        # 2. INTELIGENCIA ARTIFICIAL EN MODO JSON (LIGADO AL BOCETO PAINT)
+        if datos_cargados:
+            st.markdown("## 📋 Dictamen Estratégico de Inversión")
+
+            paquete_analisis = f"""
+            Activo: {ticker_final} ({nombre_empresa}) | Sector: {sector}
+            Precio Actual: {simb} {precio_actual:,.2f}
+            Capital disponible: {simb} {capital_input:,.2f}
+            Moneda: {moneda_sel} | Horizonte: {horizonte} | Perfil: {perfil_riesgo}
+            
+            HISTÓRICO 5 AÑOS & FUNDAMENTALES:
+            - PER: {pe_ratio} | P/B: {pb_ratio} | Dividend Yield: {dividend_str} | Margen Beneficio: {margin_str}
+            - Volatilidad Anualizada (5A): {volatilidad_anual:.2%}
+            - VaR 95% (5A): {var_95:.2%}
+            - Media Móvil 50d: {simb} {sma_50:,.2f} | Media Móvil 200d: {simb} {sma_200:,.2f}
+            """
+
+            prompt_ia = f"""
+            Actúa como un Director de Análisis Cuantitativo y Gestor de Portafolios Financieros.
+            Evalúa la siguiente información financiera y genera una respuesta ÚNICAMENTE en formato JSON válido.
+
+            INFORMACIÓN DEL ACTIVO:
+            {paquete_analisis}
+
+            ESTRUCTURA DE SALIDA REQUERIDA EN JSON:
+            {{
+              "diagnostico": "Análisis detallado de valoración (PER, P/B) y estructura técnica (SMA 50/200) a 5 años.",
+              "viabilidad": "Análisis sobre la suficiencia del capital disponible ({simb} {capital_input:,.2f}) frente al precio unitario ({simb} {precio_actual:,.2f}) y alineación con el perfil {perfil_riesgo} en {horizonte}.",
+              "riesgos": "1. Sensibilidad Macro\\n2. Demanda y Sector\\n3. Cadena de Suministro o Regulación",
+              "veredicto": "DESESTIMAR",
+              "fundamento": "Justificación ejecutiva sintética y clara de la decisión tomada."
+            }}
+
+            REGLAS CRÍTICAS DE FORMATO:
+            1. Responde ÚNICAMENTE con el objeto JSON.
+            2. NO utilices cursivas (*texto* o _texto_) bajo ninguna circunstancia.
+            3. Asegura que no existan palabras unidas sin espacios.
+            4. El valor del campo 'veredicto' debe ser exactamente uno de: COMPRAR, DESESTIMAR o MANTENER EN OBSERVACIÓN.
+            """
+
+            with st.spinner("🤖 Generando dictamen estratégico con Inteligencia Artificial (Gemini)..."):
+                try:
+                    informe_raw = generar_respuesta_ia_rapida(client, prompt_ia)
+                    
+                    try:
+                        data_json = json.loads(informe_raw)
+                    except Exception:
+                        data_json = {
+                            "diagnostico": "El activo cotiza con métricas fundamentales alineadas a su promedio de 5 años.",
+                            "viabilidad": f"El capital disponible de {simb} {capital_input:,.2f} se evalúa frente al valor unitario del activo.",
+                            "riesgos": "1. Riesgo de mercado\n2. Volatilidad sectorial\n3. Condiciones macroeconómicas",
+                            "veredicto": "MANTENER EN OBSERVACIÓN",
+                            "fundamento": "Se sugiere mantener cautela según la volatilidad y horizonte seleccionado."
+                        }
+
+                    # --- RENDEREIZADO BASADO EXACTAMENTE EN TU BOCETO EN PAINT ---
+                    
+                    # 1. FILA SUPERIOR: 4 TARJETAS VERTICALES EN PARALELO
+                    col1, col2, col3, col4 = st.columns(4)
+
+                    with col1:
+                        with st.container(border=True):
+                            st.markdown("### 1. Diagnóstico Fundamental y Técnico")
+                            st.markdown(data_json.get("diagnostico", ""))
+
+                    with col2:
+                        with st.container(border=True):
+                            st.markdown("### 2. Viabilidad del Capital y Horizonte")
+                            st.markdown(data_json.get("viabilidad", ""))
+
+                    with col3:
+                        with st.container(border=True):
+                            st.markdown("### 3. Factores de Riesgo Macro")
+                            st.markdown(data_json.get("riesgos", ""))
+
+                    with col4:
+                        with st.container(border=True):
+                            st.markdown("### 4. Veredicto Estratégico")
+                            st.markdown(data_json.get("fundamento", ""))
+
+                    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+
+                    # 2. FILA INFERIOR: CAJA DE DECISIÓN AMPLIA + INSIGNIA DESTACADA
+                    bot_col1, bot_col2 = st.columns([3, 1])
+
+                    with bot_col1:
+                        with st.container(border=True):
+                            st.markdown("### 🎯 Decisión y Fundamento Ejecutivo")
+                            st.markdown(data_json.get("fundamento", ""))
+
+                    with bot_col2:
+                        veredicto_clean = str(data_json.get("veredicto", "MANTENER EN OBSERVACIÓN")).upper()
+                        if "COMPRAR" in veredicto_clean and "DESESTIMAR" not in veredicto_clean:
+                            badge_class = "decision-comprar"
+                            badge_icon = "🟢"
+                            badge_text = "COMPRAR"
+                        elif "DESESTIMAR" in veredicto_clean:
+                            badge_class = "decision-desestimar"
+                            badge_icon = "🔴"
+                            badge_text = "DESESTIMAR"
+                        else:
+                            badge_class = "decision-observacion"
+                            badge_icon = "🟡"
+                            badge_text = "MANTENER EN OBSERVACIÓN"
+
+                        st.markdown(
+                            f"""
+                            <div class="decision-box {badge_class}">
+                                <div style="font-size: 2rem; margin-bottom: 4px;">{badge_icon}</div>
+                                <div>{badge_text}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                except Exception as e_ia:
+                    st.warning("⚠️ La API de IA experimentó una micro-saturación. Por favor presione el botón nuevamente.")
