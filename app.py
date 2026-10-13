@@ -1,3 +1,4 @@
+import json
 import re
 import time
 from google import genai
@@ -42,58 +43,25 @@ st.markdown(
         border-radius: 8px !important;
     }
 
-    /* Módulos de informe estratégico */
-    .report-card {
-        background-color: #111827;
-        border: 1px solid #1f2937;
-        border-radius: 10px;
-        padding: 24px;
-        margin-top: 10px;
-        margin-bottom: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-        line-height: 1.6;
+    /* Subtítulos Markdown (H3) */
+    .stMarkdown h3, div[data-testid="stMarkdownContainer"] h3 {
+        color: #38bdf8 !important;
+        font-weight: 700 !important;
+        font-size: 1.15rem !important;
+        margin-top: 0.2rem !important;
+        margin-bottom: 0.5rem !important;
     }
 
-    /* Badges de Veredicto Dinámico */
-    .verdict-badge-comprar {
-        background-color: rgba(16, 185, 129, 0.15);
-        border: 1px solid #10b981;
-        color: #34d399;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-weight: 800;
-        display: inline-block;
-        font-size: 1.1rem;
-        letter-spacing: 0.05em;
-    }
-    
-    .verdict-badge-desestimar {
-        background-color: rgba(239, 68, 68, 0.15);
-        border: 1px solid #ef4444;
-        color: #f87171;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-weight: 800;
-        display: inline-block;
-        font-size: 1.1rem;
-        letter-spacing: 0.05em;
-    }
-
-    .verdict-badge-observacion {
-        background-color: rgba(245, 158, 11, 0.15);
-        border: 1px solid #f59e0b;
-        color: #fbbf24;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-weight: 800;
-        display: inline-block;
-        font-size: 1.1rem;
-        letter-spacing: 0.05em;
+    /* Párrafos y listas */
+    .stMarkdown p, div[data-testid="stMarkdownContainer"] p, div[data-testid="stMarkdownContainer"] li {
+        color: #e5e7eb !important;
+        font-size: 0.93rem !important;
+        line-height: 1.6 !important;
     }
 
     /* Títulos y Métricas */
     h1 { color: #ffffff !important; font-weight: 800 !important; }
-    h2, h3 { color: #38bdf8 !important; font-weight: 700 !important; }
+    h2 { color: #38bdf8 !important; font-weight: 700 !important; }
     
     [data-testid="stMetric"] {
         background-color: #111827;
@@ -121,6 +89,40 @@ st.markdown(
         box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
     }
 
+    /* Caja de Veredicto Inferior (Insignia Impactante) */
+    .decision-box {
+        text-align: center;
+        border-radius: 12px;
+        padding: 20px 10px;
+        font-weight: 800;
+        font-size: 1.25rem;
+        letter-spacing: 0.05em;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 125px;
+    }
+
+    .decision-comprar {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.45) 100%);
+        border: 2px solid #10b981;
+        color: #34d399;
+    }
+
+    .decision-desestimar {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.45) 100%);
+        border: 2px solid #ef4444;
+        color: #f87171;
+    }
+
+    .decision-observacion {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.45) 100%);
+        border: 2px solid #f59e0b;
+        color: #fbbf24;
+    }
+
     /* Descargo Legal */
     .disclaimer-box {
         background-color: #17120a;
@@ -141,22 +143,21 @@ api_key_oculta = st.secrets.get("GEMINI_API_KEY", "")
 client = genai.Client(api_key=api_key_oculta) if api_key_oculta else None
 
 
-# SISTEMA RESILIENTE Y ULTRA RÁPIDO DE IA
+# SISTEMA IA CON RESPUESTA ESTRUCTURADA EN JSON
 def generar_respuesta_ia_rapida(client, prompt):
     modelos_validos = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     ultimo_error = None
 
     config = types.GenerateContentConfig(
         temperature=0.2,
-        max_output_tokens=600
+        max_output_tokens=1000,
+        response_mime_type="application/json"
     )
 
     for modelo in modelos_validos:
         try:
             response = client.models.generate_content(
-                model=modelo,
-                contents=prompt,
-                config=config
+                model=modelo, contents=prompt, config=config
             )
             if response and response.text:
                 return response.text
@@ -415,7 +416,7 @@ if st.button(
 
                 st.markdown("---")
 
-                # --- MOSTRAR GRÁFICO PLOTLY CON AUTO-ESCALADO PERFECTO ---
+                # --- MOSTRAR GRÁFICO PLOTLY CON AUTO-ESCALADO ---
                 st.markdown(
                     f"### 📈 Comportamiento Histórico a 5 Años & Proyección ({horizonte})"
                 )
@@ -508,72 +509,4 @@ if st.button(
                 st.markdown("---")
 
         except Exception as e:
-            st.error(f"Error procesando métricas financieras: {str(e)}")
-
-        # 2. INTELIGENCIA ARTIFICIAL OPTIMIZADA CON PARÁMETROS RÁPIDOS
-        if datos_cargados:
-            st.markdown(
-                "## 📋 Dictamen Estratégico de Inversión", unsafe_allow_html=True
-            )
-
-            paquete_analisis = f"""
-            Activo: {ticker_final} ({nombre_empresa}) | Sector: {sector}
-            Precio Actual: {simb} {precio_actual:,.2f}
-            Capital disponible: {simb} {capital_input:,.2f}
-            Moneda: {moneda_sel} | Horizonte: {horizonte} | Perfil: {perfil_riesgo}
-            
-            HISTÓRICO 5 AÑOS & FUNDAMENTALES:
-            - PER: {pe_ratio} | P/B: {pb_ratio} | Dividend Yield: {dividend_str} | Margen Beneficio: {margin_str}
-            - Volatilidad Anualizada (5A): {volatilidad_anual:.2%}
-            - VaR 95% (5A): {var_95:.2%}
-            - Media Móvil 50d: {simb} {sma_50:,.2f} | Media Móvil 200d: {simb} {sma_200:,.2f}
-            """
-
-            prompt_ia = f"""
-            Actúa como un Director de Análisis Cuantitativo y Gestor de Portafolios Financieros.
-            Proporciona un dictamen conciso y riguroso evaluando el horizonte de 5 años:
-
-            {paquete_analisis}
-
-            ESTRUCTURA EXACTA:
-            ### 1. Diagnóstico Fundamental y Técnico (5 Años)
-            [Análisis puntual de tendencia a 5 años, PER y Medias Móviles]
-
-            ### 2. Viabilidad del Capital y Horizonte
-            [Analiza si {simb} {capital_input:,.2f} es suficiente para operarlo en {horizonte}]
-
-            ### 3. Factores de Riesgo Macro
-            [Tres riesgos clave concretos]
-
-            ### 4. Veredicto Estratégico
-            Recomendación: [Escribe exactamente COMPRAR, DESESTIMAR o MANTENER EN OBSERVACIÓN]
-            Fundamento: [Justificación sintética]
-            """
-
-            with st.spinner("🤖 Generando dictamen estratégico con Inteligencia Artificial (Gemini)..."):
-                try:
-                    informe_raw = generar_respuesta_ia_rapida(client, prompt_ia)
-
-                    badge_html = ""
-                    informe_upper = informe_raw.upper()
-                    if "COMPRAR" in informe_upper and "DESESTIMAR" not in informe_upper:
-                        badge_html = "<div class='verdict-badge-comprar'>🟢 RECOMENDACIÓN: COMPRAR</div>"
-                    elif "DESESTIMAR" in informe_upper:
-                        badge_html = "<div class='verdict-badge-desestimar'>🔴 RECOMENDACIÓN: DESESTIMAR</div>"
-                    else:
-                        badge_html = "<div class='verdict-badge-observacion'>🟡 RECOMENDACIÓN: MANTENER EN OBSERVACIÓN</div>"
-
-                    st.markdown(
-                        f"<div style='margin-bottom: 15px;'>{badge_html}</div>",
-                        unsafe_allow_html=True,
-                    )
-
-                    st.markdown(
-                        f"<div class='report-card'>{informe_raw}</div>",
-                        unsafe_allow_html=True,
-                    )
-
-                except Exception as e_ia:
-                    st.warning(
-                        "⚠️ La API de IA experimentó una micro-saturación. Por favor presione el botón nuevamente."
-                    )
+            st.error(f"
