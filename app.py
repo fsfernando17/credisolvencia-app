@@ -140,13 +140,13 @@ api_key_oculta = st.secrets.get("GEMINI_API_KEY", "")
 client = genai.Client(api_key=api_key_oculta) if api_key_oculta else None
 
 
-# SISTEMA DE CONEXIÓN ULTRARRÁPIDO CON MODELOS OFICIALES (gemini-3.8-flash -> gemini-3.7-flash -> gemini-3.6-flash)
+# SISTEMA RESILIENTE A ERRORES 500 INTERNAL Y SATURACIÓN
 def generar_respuesta_ia_rapida(client, prompt):
   modelos_validos = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"]
   ultimo_error = None
 
   for modelo in modelos_validos:
-    for intento in range(2):
+    for intento in range(3):
       try:
         response = client.models.generate_content(
             model=modelo, contents=prompt
@@ -156,17 +156,26 @@ def generar_respuesta_ia_rapida(client, prompt):
       except Exception as e:
         ultimo_error = e
         err_str = str(e)
-        if (
-            "503" in err_str
-            or "UNAVAILABLE" in err_str
-            or "429" in err_str
-            or "RESOURCE_EXHAUSTED" in err_str
+        # Captura errores de servidor (500 INTERNAL, 503 UNAVAILABLE, 429 RATE LIMIT)
+        if any(
+            err in err_str
+            for err in [
+                "500",
+                "503",
+                "429",
+                "INTERNAL",
+                "UNAVAILABLE",
+                "RESOURCE_EXHAUSTED",
+            ]
         ):
-          time.sleep(0.5 * (intento + 1))
+          time.sleep(1.0 * (intento + 1))  # Pausa de recuperación
         else:
-          break
+          break  # Si es un error no recuperable en este modelo, probar el siguiente
 
-  raise Exception(f"Detalle de servicio API: {str(ultimo_error)}")
+  raise Exception(
+      "El servidor de Google enfrentó una interrupción temporal (500/503)."
+      f" Detalle: {str(ultimo_error)}"
+  )
 
 
 # --- DICCIONARIOS Y TASAS DE CONVERSIÓN ---
@@ -581,4 +590,8 @@ if st.button(
           )
 
         except Exception as e_ia:
-          st.error(f"Error al generar el dictamen de IA: {str(e_ia)}")
+          st.warning(
+              "⚠️ El servidor de Inteligencia Artificial experimentó una"
+              " congestión momentánea. Por favor, vuelva a presionar el botón"
+              " de ejecución."
+          )
